@@ -103,7 +103,7 @@ class RotationTests(unittest.TestCase):
         self.assertEqual((folder/job['handoffs'][0]['file']).stat().st_mode & 0o777,0o600)
         self.assertEqual(json.loads((folder/'transaction.json').read_text())['phase'],'complete')
         methods=[m for rpc in FakeSessionRPC.instances for m,_ in rpc.calls]
-        self.assertEqual(methods,['thread/name/set','thread/resume','thread/compact/start','turn/start','account/read','account/rateLimits/read','thread/start','thread/name/set','thread/inject_items'])
+        self.assertEqual(methods,['thread/name/set','thread/resume','thread/read','thread/compact/start','turn/start','account/read','account/rateLimits/read','thread/start','thread/name/set','thread/inject_items'])
         self.assertTrue(all(rpc.closed for rpc in FakeSessionRPC.instances))
         self.assertEqual(self.service.config['threads'],['imported-thread'])
         self.assertEqual(len(self.collected),2)  # target quota checked before compaction and before switch
@@ -425,8 +425,12 @@ class RotationTests(unittest.TestCase):
 
     def test_known_target_missing_never_falls_back_to_new_thread(self):
         first=self.run_job(target=self.target);self.add_imported_inventory(first)
-        FakeSessionRPC.failure='thread/read'
-        job=self.run_job(target=self.source)
+        original=FakeSessionRPC.call
+        def call(rpc,method,params=None,**kwargs):
+            if method=='thread/read' and params['threadId']=='source-thread':
+                raise RotationError('Tracked destination missing')
+            return original(rpc,method,params,**kwargs)
+        with patch.object(FakeSessionRPC,'call',call):job=self.run_job(target=self.source)
         self.assertEqual(job['phase'],'failed')
         self.assertTrue(job['rolled_back'])
         self.assertEqual(FakeSessionRPC.created,1)
@@ -507,6 +511,25 @@ class RotationTests(unittest.TestCase):
             self.assertEqual(self.service.record['phase'],'recovery_required')
             self.assertTrue(self.service.record['desktop_reopen_deferred'])
             controller.reopen.assert_not_called()
+
+    def test_automatic_toggle_does_not_cancel_or_start_job(self):
+        self.service.set_automatic(True)
+        self.assertTrue(self.service.config['enabled'])
+        self.assertIsNone(self.service.worker)
+        self.service.set_automatic(False)
+        self.assertFalse(self.service.config['enabled'])
+        self.assertFalse(self.service.cancel_event.is_set())
+        with self.assertRaises(RotationError):self.service.set_automatic('true')
+
+    def test_active_source_is_not_compacted(self):
+        original=FakeSessionRPC.call
+        def call(rpc,method,params=None,**kwargs):
+            if method=='thread/read':return {'thread':{'id':params['threadId'],'status':{'type':'active'}}}
+            return original(rpc,method,params,**kwargs)
+        with patch.object(FakeSessionRPC,'call',call):job=self.run_job()
+        self.assertEqual(job['phase'],'failed')
+        self.assertFalse(any(m=='thread/compact/start' for rpc in FakeSessionRPC.instances for m,p in rpc.calls))
+        self.assertFalse(job['handoffs'])
 
     def test_automatic_cannot_quit_desktop(self):
         with self.assertRaises(RotationError):

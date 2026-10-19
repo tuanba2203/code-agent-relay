@@ -223,3 +223,12 @@ Vì guard hiện tại yêu cầu client đóng, desktop được đóng **trư�
 Lưu công việc trước khi xác nhận. Chạy server trong Terminal riêng và dashboard trong Safari/Chrome; đóng ChatGPT.app cũng đóng browser/chat nằm trong app đó. VS Code và CLI khác vẫn phải đóng thủ công. Code ghi trạng thái đóng/mở lại vào journal và activity log.
 
 `code --disable-extension ...` rồi `code .` chưa được dùng để bỏ guard VS Code: chưa có xác minh rằng chuỗi lệnh đó dừng app-server của extension trong mọi cửa sổ/profile đang mở rồi bật lại đúng trạng thái. Không sửa hay disable extension đang cài.
+
+
+## Ý nghĩa các nút thao tác
+
+- **Compact & tạo handoff mới:** gọi compact thật và tạo Markdown mới cho các workflow đã chọn; giữ account, không import. Chờ client đóng; thread active bị từ chối để không cắt lượt đang chạy.
+- **Compact & chuyển account:** toàn bộ compact → handoff mới → chọn đích → đổi đăng nhập → import; continuation chỉ khi đã bật.
+- **Chỉ đổi account:** không compact/handoff/import, vẫn cần client đóng.
+- Checkbox **Tự động rotate khi quota thấp:** chỉ thay cờ tự động, không hủy job hiện tại. Tắt được cả lúc job đang chạy.
+- **Hủy phiên đang chạy:** yêu cầu dừng job và tắt tự động để tránh chạy lại; giữ dữ liệu đã hoàn tất. Không hoàn tác sửa file project.

@@ -336,7 +336,7 @@ def handler_for(store):
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict):
                     raise SnapshotError("Object required")
-                if self.path in ('/api/rotation/settings','/api/rotation/start','/api/rotation/cancel','/api/rotation/recovery','/api/rotation/workflow','/api/rotation/names'):
+                if self.path in ('/api/rotation/settings','/api/rotation/start','/api/rotation/cancel','/api/rotation/recovery','/api/rotation/workflow','/api/rotation/names','/api/rotation/automatic'):
                     if not store.rotation:
                         self.respond(409,b'{"error":"Live rotation is not available"}');return
                     try:
@@ -344,6 +344,7 @@ def handler_for(store):
                         elif self.path.endswith('/workflow'):result=store.rotation.update_workflow(data)
                         elif self.path.endswith('/names'):result=store.rotation.sync_names(force=True)
                         elif self.path.endswith('/start'):result=store.rotation.start(data.get('mode','rotate'),data.get('target'),workflow_id=data.get('workflow_id'),restart_desktop=data.get('restart_desktop',False))
+                        elif self.path.endswith('/automatic'):result=store.rotation.set_automatic(data.get('enabled'))
                         elif self.path.endswith('/cancel'):result=store.rotation.cancel()
                         else:result=store.rotation.acknowledge_recovery()
                         self.respond(200,json.dumps(result,ensure_ascii=False).encode())

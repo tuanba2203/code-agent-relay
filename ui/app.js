@@ -369,6 +369,9 @@ function renderRotation(state){
   clientStatus.hidden=!state.client_check;
   clientStatus.textContent=state.client_check?`Kiểm tra hiện tại: ${state.client_check.message}`:'';
   $('rotation-recovery').disabled=rotationBusy||state.busy||state.client_check?.clear===false;
+  $('rotation-auto-toggle').checked=!!config.enabled;
+  $('rotation-auto-toggle').disabled=rotationBusy||(!config.enabled&&(state.busy||['failed','recovery_required'].includes(job.phase)));
+  $('rotation-cancel').disabled=rotationBusy||!state.busy;
   $('rotation-config-summary').textContent=`${config.workflow_ids?.length||config.threads?.length||0} luồng · Tự động: ${config.enabled?'bật':'tắt'} · Tiếp tục bằng Relay: ${config.continue_work?'bật':'tắt'}`+(state.file_auth_ready?'':` · Cần thiết lập cli_auth_credentials_store = \"file\" ở đầu ${state.codex_home}/config.toml và đăng nhập lại trước khi chạy.`);
   for(const id of ['rotation-start','rotation-checkpoint','rotation-settings'])$(id).disabled=state.busy||rotationBusy;
   const missing=(state.managed_threads||[]).filter(flow=>(config.workflow_ids||[]).includes(flow.id)&&!flow.bindings[state.active_account]);
@@ -455,7 +458,7 @@ async function confirmRotation(mode){
     if(flows.some(flow=>!flow.bindings[state.active_account]))throw new Error('Có workflow chưa có thread nguồn. Nạp handoff còn thiếu trong Luồng công việc được quản lý trước khi chạy.');
     confirmedRotationMode=mode;
     $('rotation-restart-desktop').checked=false;
-    $('rotation-confirm-title').textContent=mode==='rotate'?'Xác nhận rotate tài khoản':'Xác nhận compact & export';
+    $('rotation-confirm-title').textContent=mode==='rotate'?'Xác nhận compact, tạo handoff và chuyển account':'Xác nhận compact thật và tạo handoff mới';
     const box=$('rotation-confirm-content');box.replaceChildren();
     const name=state.accounts?.find(account=>account.id===state.active_account)?.name||state.active_account||'Chưa xác định';
     box.append(node('p','',`Account nguồn: ${name}`));
@@ -496,7 +499,8 @@ $('force-switch-confirm').addEventListener('click',async()=>{
   }catch(error){$('force-switch-error').textContent=error.message;}
   finally{button.disabled=false;}
 });
-$('rotation-cancel').addEventListener('click',()=>rotationAction('/api/rotation/cancel'));
+$('rotation-auto-toggle').addEventListener('change',()=>rotationAction('/api/rotation/automatic',{enabled:$('rotation-auto-toggle').checked}));
+$('rotation-cancel').addEventListener('click',()=>{if(confirm('Dừng phiên hiện tại và tắt tự động? Các bước đã hoàn tất và handoff được giữ; không hoàn tác sửa file project.'))rotationAction('/api/rotation/cancel');});
 $('rotation-recovery').addEventListener('click',()=>rotationAction('/api/rotation/recovery'));
 setInterval(pollRotation,3000);
 pollRotation();

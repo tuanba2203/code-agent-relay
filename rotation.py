@@ -561,6 +561,19 @@ class RotationService:
                     self.config['enabled']=False;atomic(self.config_path,self.config)
                     self._save('failed','Không bắt đầu rotate: '+str(error),failed_phase='preflight')
 
+    def set_automatic(self,enabled):
+        if not isinstance(enabled,bool):raise RotationError('Automatic must be boolean')
+        with self.lock:
+            if enabled:
+                if self.status()['busy']:raise RotationError('Wait for the current job before enabling automatic rotation')
+                if self.record.get('phase') in ('failed','recovery_required'):
+                    raise RotationError('Acknowledge recovery before enabling automatic rotation')
+                if not self.config.get('workflow_ids'):raise RotationError('Select workflows first')
+                self._validate_source_bindings(self._identity())
+            self.config['enabled']=enabled
+            atomic(self.config_path,self.config)
+        return self.status()
+
     def cancel(self):
         self.cancel_event.set()
         with self.lock:
@@ -704,6 +717,9 @@ class RotationService:
                     try:
                         rpc.call('thread/resume',{'threadId':key,'excludeTurns':True,
                                                  'sandbox':'read-only','approvalPolicy':'on-request'})
+                        current=rpc.call('thread/read',{'threadId':key}).get('thread') or {}
+                        if current.get('id')!=key or (current.get('status') or {}).get('type')=='active':
+                            raise RotationError('Source thread is missing or active; finish its running turn before compacting')
                         rpc.call('thread/compact/start',{'threadId':key})
                         rpc.wait_turn(key,compact=True,cancel=self.cancel_event,progress=self._wait_progress)
                         self._save('exporting','Đang tạo handoff %d.'%(index+1))
