@@ -462,12 +462,27 @@ async function confirmRotation(mode){
     const box=$('rotation-confirm-content');box.replaceChildren();
     const name=state.accounts?.find(account=>account.id===state.active_account)?.name||state.active_account||'Chưa xác định';
     box.append(node('p','',`Account nguồn: ${name}`));
+    if(mode==='rotate'){
+      const label=node('label','','Account đích '),select=node('select');select.id='rotation-target';
+      const automatic=node('option','','Tự chọn theo quota và thời điểm reset');automatic.value='';select.append(automatic);
+      for(const account of state.accounts||[]){
+        if(account.id===state.active_account)continue;
+        const option=node('option','',account.name||account.id);option.value=account.id;select.append(option);
+      }
+      label.append(select);box.append(label);
+      const destination=node('p','account-help');destination.id='rotation-target-description';
+      const describe=()=>{destination.textContent=select.value
+        ?`Chuyển đến ${select.selectedOptions[0].textContent}. Vẫn kiểm tra quota; nếu account bị disable, không đủ quota hoặc không xác minh được thì dừng, không tự đổi sang account khác.`
+        :'Relay tự chọn account đủ điều kiện theo chính sách quota/reset hiện tại.';};
+      select.addEventListener('change',describe);describe();box.append(destination);
+    }
+
     const list=node('ul');
     for(const flow of flows)list.append(node('li','',`${flow.label} · ${flow.bindings[state.active_account]?.thread_id||'Chưa có thread nguồn'} · ${flow.cwd}`));
     box.append(list);
     const steps=node('ol');
     const descriptions=['Chờ client đóng; xác minh account và quota.','Sao lưu dữ liệu, compact từng thread và xuất handoff Markdown.'];
-    if(mode==='rotate')descriptions.push('Chọn account đích đủ quota theo chính sách hiện tại; xác minh lại trước khi đổi.','Đổi đăng nhập, xác minh account đích; dùng lại thread liên kết hoặc tạo mới, đồng bộ alias và import toàn bộ context.',state.config.continue_work?'Sau import, Relay chạy tiếp một lượt: có thể sửa file trong project, tắt mạng.':'Sau import, mở client để tiếp tục thủ công.');
+    if(mode==='rotate')descriptions.push('Xác minh account đích đã chỉ định, hoặc tự chọn theo chính sách quota/reset; kiểm tra lại trước khi đổi.','Đổi đăng nhập, xác minh account đích; dùng lại thread liên kết hoặc tạo mới, đồng bộ alias và import toàn bộ context.',state.config.continue_work?'Sau import, Relay chạy tiếp một lượt: có thể sửa file trong project, tắt mạng.':'Sau import, mở client để tiếp tục thủ công.');
     else descriptions.push('Kết thúc tại checkpoint; giữ nguyên account, không import hoặc chạy tiếp.');
     for(const text of descriptions)steps.append(node('li','',text));box.append(steps);
     $('rotation-confirm-dialog').showModal();
@@ -478,7 +493,7 @@ $('rotation-checkpoint').addEventListener('click',()=>confirmRotation('checkpoin
 $('rotation-confirm-cancel').addEventListener('click',()=>{confirmedRotationMode=null;$('rotation-confirm-dialog').close();});
 $('rotation-confirm-run').addEventListener('click',()=>{
   const mode=confirmedRotationMode;confirmedRotationMode=null;$('rotation-confirm-dialog').close();
-  if(mode)rotationAction('/api/rotation/start',{mode,restart_desktop:$('rotation-restart-desktop').checked});
+  if(mode)rotationAction('/api/rotation/start',{mode,target:mode==='rotate'?($('rotation-target')?.value||null):null,restart_desktop:$('rotation-restart-desktop').checked});
 });
 $('force-switch').addEventListener('click',async()=>{
   try{

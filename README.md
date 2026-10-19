@@ -232,3 +232,5 @@ Lưu công việc trước khi xác nhận. Chạy server trong Terminal riêng 
 - **Chỉ đổi account:** không compact/handoff/import, vẫn cần client đóng.
 - Checkbox **Tự động rotate khi quota thấp:** chỉ thay cờ tự động, không hủy job hiện tại. Tắt được cả lúc job đang chạy.
 - **Hủy phiên đang chạy:** yêu cầu dừng job và tắt tự động để tránh chạy lại; giữ dữ liệu đã hoàn tất. Không hoàn tác sửa file project.
+
+Trong popup **Compact & chuyển account**, chọn **Tự chọn theo quota và thời điểm reset** hoặc account đích cụ thể (alias/email). Account hiện tại không nằm trong danh sách đích. Account chỉ định vẫn phải đủ quota và không bị disable; nếu không đạt thì job dừng, không fallback sang account khác. Lựa chọn áp dụng cho job thủ công hiện tại.
