@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local-only quota dashboard. Does not log in, switch accounts or launch apps."""
+"""Local Codex dashboard with explicit account, rotation and opt-in proxy controls."""
 import argparse
 import json
 import math
@@ -15,6 +15,7 @@ from live_quota import Collector, QuotaError
 from onboarding import LoginFlow
 from rotation import RotationService, RotationError, ExecutionLease
 from quota_policy import priority, entry_ceiling, reset_wait
+from smart_proxy import SmartProxy,ProxyError
 
 STATIC = Path(__file__).parent / "ui"
 SECRET_FIELDS = {"access_token", "refresh_token", "id_token", "openai_api_key",
@@ -139,6 +140,7 @@ class Store:
         self.accounts = accounts
         self.collector = collector
         self.demo = demo
+        self.proxy = None
         self.live_packet = None
         self.stop_event = threading.Event()
         self.refresh_event = threading.Event()
@@ -157,7 +159,7 @@ class Store:
         if self.rotation:
             try:self.rotation.sync_names()
             except (AccountError,RotationError,OSError,QuotaError):pass
-            self.rotation.maybe_auto(self.view())
+            if not self.proxy:self.rotation.maybe_auto(self.view())
 
     def _collect_once(self):
         with self.lock:
@@ -200,6 +202,7 @@ class Store:
     def close(self):
         if self.rotation:
             self.rotation.cancel()
+        if self.proxy:self.proxy.close()
         if self.login:
             self.login.cancel()
         self.stop_event.set()
@@ -310,6 +313,11 @@ def handler_for(store):
                 except (AccountError, OSError):
                     self.respond(409, b'{"error":"Cannot read saved profiles safely."}')
                 return
+            if path == '/api/proxy':
+                try:result=store.proxy.status() if store.proxy else {'enabled':False}
+                except (ProxyError,AccountError,OSError):
+                    self.respond(409,b'{"error":"Cannot read proxy state"}');return
+                self.respond(200,json.dumps(result,ensure_ascii=False).encode());return
             if path == "/api/state":
                 try:
                     self.respond(200, json.dumps(store.view(), ensure_ascii=False).encode())
@@ -336,10 +344,22 @@ def handler_for(store):
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict):
                     raise SnapshotError("Object required")
+                if self.path in ('/api/proxy/checkpoint','/api/proxy/alias'):
+                    if not store.proxy:
+                        self.respond(409,b'{"error":"Proxy is not enabled"}');return
+                    try:
+                        result=(store.proxy.rename(data.get('session'),data.get('alias')) if self.path.endswith('/alias')
+                                else store.proxy.start_checkpoint(data.get('session'),data.get('target')))
+                    except (ProxyError,AccountError,OSError):
+                        self.respond(409,b'{"error":"Cannot start proxy checkpoint; inspect the session and target"}');return
+                    self.respond(200,json.dumps(result,ensure_ascii=False).encode());return
                 if self.path in ('/api/rotation/settings','/api/rotation/start','/api/rotation/cancel','/api/rotation/recovery','/api/rotation/workflow','/api/rotation/names','/api/rotation/automatic'):
                     if not store.rotation:
                         self.respond(409,b'{"error":"Live rotation is not available"}');return
                     try:
+                        if store.proxy and (self.path.endswith('/start') or
+                                self.path.endswith(('/settings','/automatic')) and data.get('enabled')):
+                            raise RotationError('Cold rotation is unavailable while proxy mode is enabled; use proxy handoff routing')
                         if self.path.endswith('/settings'):result=store.rotation.configure(data)
                         elif self.path.endswith('/workflow'):result=store.rotation.update_workflow(data)
                         elif self.path.endswith('/names'):result=store.rotation.sync_names(force=True)
@@ -428,6 +448,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--snapshot", type=Path)
+    parser.add_argument('--proxy-port',type=int,default=None,help='Opt in to experimental subscription proxy on this loopback port')
     parser.add_argument('--demo', action='store_true', help='Explicitly use sample data instead of connecting accounts')
     parser.add_argument('--manage-accounts', action='store_true', help='Enable explicit file-auth capture and offline switching')
     parser.add_argument('--accounts-dir', type=Path, default=Path(__file__).resolve().parent/'.relay-accounts')
@@ -445,6 +466,10 @@ def main():
                 print('Current local login unavailable; add a profile with accounts.py login.',flush=True)
     collector=Collector(manager) if manager and not args.demo and args.snapshot is None else None
     store=Store(args.snapshot,manager,collector,demo=args.demo)
+    if args.proxy_port is not None:
+        if not manager or not collector:parser.error('--proxy-port requires live account mode')
+        store.proxy=SmartProxy(manager,collector,lambda:dict(store.options),store.operation_lock,port=args.proxy_port)
+        store.proxy.start()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(store))
     server.timeout = 10
     print("Codex Relay: http://127.0.0.1:%d" % server.server_port, flush=True)

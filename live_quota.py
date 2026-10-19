@@ -208,7 +208,11 @@ class Collector:
         return {'received_at':time.time(),'result':{'schema_version':1,'command':'list',
                                                   'active_account_key':current,'accounts':rows}}
 
-    def _read_profile(self, profile):
+    def read_proxy_profile(self,profile):
+        # Proxy owns its saved credential chain, not a running client's auth cache.
+        return self._read_profile(profile,prefer_live=False)
+
+    def _read_profile(self, profile,prefer_live=True):
         with self.manager.lock():
             if self.manager.journal.exists():
                 raise QuotaError('Account switch recovery is pending')
@@ -217,7 +221,7 @@ class Collector:
             original = saved
             try:
                 live = read_private(self.manager.home/'auth.json')
-                if identify(live)['id']==profile['id']:
+                if prefer_live and identify(live)['id']==profile['id']:
                     saved = live
             except AccountError:
                 pass

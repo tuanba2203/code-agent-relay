@@ -115,6 +115,26 @@ class HttpTests(unittest.TestCase):
         self.assertIn("frame-ancestors 'none'", headers)
         self.assertTrue(json.loads(self.http('/api/state')[2])['demo'])
 
+    def test_proxy_disabled_by_default_and_controls_require_csrf(self):
+        self.assertEqual(json.loads(self.http('/api/proxy')[2]),{'enabled':False})
+        self.assertEqual(self.http('/api/proxy/checkpoint','POST',{'session':'x'},authorized=False)[0],403)
+        self.assertEqual(self.http('/api/proxy/checkpoint','POST',{'session':'x'})[0],409)
+
+    def test_proxy_dashboard_controls_and_cold_rotation_exclusion(self):
+        from unittest.mock import Mock
+        proxy=Mock()
+        proxy.status.return_value={'enabled':True,'sessions':[]}
+        proxy.start_checkpoint.return_value={'enabled':True}
+        self.store.proxy=proxy
+        self.assertTrue(json.loads(self.http('/api/proxy')[2])['enabled'])
+        self.assertEqual(self.http('/api/proxy/checkpoint','POST',{'session':'thread','target':'target'})[0],200)
+        proxy.start_checkpoint.assert_called_once_with('thread','target')
+        self.store.rotation=Mock()
+        self.assertEqual(self.http('/api/rotation/start','POST',{'mode':'rotate'})[0],409)
+        self.store.rotation.start.assert_not_called()
+        self.assertEqual(self.http('/api/rotation/automatic','POST',{'enabled':True})[0],409)
+        self.store.rotation.set_automatic.assert_not_called()
+
     def test_settings_require_csrf(self):
         self.assertEqual(self.http('/api/settings', 'POST', {}, authorized=False)[0], 403)
 

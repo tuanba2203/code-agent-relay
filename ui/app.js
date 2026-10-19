@@ -599,3 +599,48 @@ $('theme-select').addEventListener('change',()=>{
 });
 themeMedia.addEventListener('change',()=>{if(themeChoice==='system')applyTheme();});
 applyTheme();
+
+
+let proxyBusy=false;
+async function pollProxy(){
+  if(!view?.live){$('proxy-status').textContent='Proxy chỉ khả dụng khi chạy server ở live mode.';return;}
+  if(proxyBusy)return;
+  try{
+    const state=await accountAPI('/api/proxy');
+    if(state.enabled){
+      for(const id of ['rotation-start','rotation-checkpoint','rotation-auto-toggle'])$(id).disabled=true;
+    }
+    $('proxy-status').textContent=state.enabled?`Endpoint: ${state.endpoint} · ${state.sessions.length} thread · Key riêng tại ${state.key_file}`:'Proxy chưa bật. Khởi động server với --proxy-port 8767 để thử nghiệm.';
+    $('proxy-log').textContent=(state.events||[]).map(e=>`${new Date(e.time*1000).toLocaleString('vi-VN')} · ${e.kind} · ${e.alias} · ${e.account_name}${e.code?' · '+e.code:''}`).join('\n')||'Chưa có hoạt động proxy.';
+    const box=$('proxy-sessions');
+    if(box.contains(document.activeElement))return;
+    box.replaceChildren();
+    for(const session of state.sessions||[]){
+      const row=node('div','binding-row');
+      row.append(node('p','',`${session.alias} · ${session.account_name} · ${session.state} · lần chuyển ${session.generation}`));
+      row.append(node('code','',session.id));
+      if(session.quota)row.append(node('p','account-help',`Quota còn lại: ngắn hạn ${pct(100-session.quota.primary.used_percent)} · tuần ${pct(100-session.quota.secondary.used_percent)} · đọc lúc ${new Date(session.quota.checked_at*1000).toLocaleTimeString('vi-VN')}`));
+      const alias=node('input');alias.value=session.alias;alias.maxLength=80;alias.setAttribute('aria-label','Alias thread proxy');
+      const rename=node('button','button secondary','Lưu alias');rename.disabled=session.inflight;
+      rename.addEventListener('click',async()=>{try{await accountAPI('/api/proxy/alias',{session:session.id,alias:alias.value});await pollProxy();}catch(error){$('proxy-status').textContent=error.message;}});
+      row.append(alias,rename);
+
+      if(session.error)row.append(node('p','account-help',`Lỗi: ${session.error}. Không tự retry.`));
+      const select=node('select'),automatic=node('option','','Tự chọn account theo quota/reset');automatic.value='';select.append(automatic);
+      for(const account of state.accounts||[]){if(account.id===session.account)continue;const option=node('option','',account.name);option.value=account.id;select.append(option);}
+      row.append(select);
+      const button=node('button','button secondary','Tạo handoff & chuyển tuyến');
+      button.disabled=session.inflight||session.state==='uncertain';
+      button.addEventListener('click',async()=>{
+        if(!confirm(`Tạo handoff cho ${session.alias} bằng account ${session.account_name}, sau đó chuyển tuyến ${select.value?select.selectedOptions[0].textContent:'tự chọn'}? Dùng quota thật; bản tóm tắt có thể mất chi tiết. Không sửa auth.json, không tạo thread local mới. Chờ lượt agent kết thúc trước khi xác nhận.`))return;
+        proxyBusy=true;button.disabled=true;
+        try{await accountAPI('/api/proxy/checkpoint',{session:session.id,target:select.value||null});}
+        catch(error){$('proxy-status').textContent=error.message;}
+        finally{proxyBusy=false;await pollProxy();}
+      });row.append(button);box.append(row);
+    }
+  }catch(error){$('proxy-status').textContent=error.message;}
+}
+$('proxy-refresh').addEventListener('click',pollProxy);
+setInterval(pollProxy,5000);
+pollProxy();

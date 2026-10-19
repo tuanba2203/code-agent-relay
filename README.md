@@ -18,6 +18,12 @@ Dự án độc lập, không phải sản phẩm chính thức của OpenAI. Kh
 
 Relay không cộng quota thành một pool và không tăng giới hạn của nhà cung cấp. Quota ChatGPT không nằm trong dashboard.
 
+## Smart proxy + Relay (nhánh thử nghiệm)
+
+Có chế độ proxy subscription opt-in: `python3 dashboard.py --port 8766 --proxy-port 8767`. Giữ account theo thread, forward request/stream, theo dõi quota và tạo handoff trước khi chuyển tuyến. Không sửa file auth global hay restart client theo account. Có panel quản lý thread, alias và checkpoint trong dashboard.
+
+Chưa kiểm thử với desktop/VS Code thật; không bật mặc định, không tự đổi cấu hình client hoặc tự gọi model để checkpoint. Context được lưu riêng trên máy để phục hồi; lỗi gián đoạn không tự replay. Xem [docs/smart-proxy.md](docs/smart-proxy.md) để cấu hình, giới hạn và bài thử A → B.
+
 ## Tính năng
 
 | Nhóm | Chức năng |
