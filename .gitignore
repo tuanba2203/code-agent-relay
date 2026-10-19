@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.relay-accounts/
+*.auth.json
+auth.json
+*source.zip
+
+# Local secrets, runtime output and developer tooling
+.env
+.env.*
+!.env.example
+.DS_Store
+logs/
+*.log
+.venv/
+node_modules/

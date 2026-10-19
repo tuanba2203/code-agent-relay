@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-QG_xHCknJuCbH76BXRusgdJXtidB7iXU'; style-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Codex Relay · Quota & rotation</title><style>:root{--ink:#192b2a;--muted:#7e8b88;--line:#e7ece9;--teal:#166c56;--mint:#e6f3eb;--bg:#f6f8f6;--amber:#bb7d30}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}button,input{font:inherit}button,a,input{touch-action:manipulation}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #49a68d;outline-offset:4px}a{text-decoration:none;color:inherit}.sidebar{width:230px;background:var(--surface);position:fixed;inset:0 auto 0 0;border-right:1px solid var(--line);padding:36px 22px;display:flex;flex-direction:column}.brand{display:flex;gap:12px;align-items:center;font-size:33px;font-weight:750;letter-spacing:-1.8px;padding:0 12px}.brand-icon{display:grid;place-items:center;background:var(--ink);color:var(--on-accent);border-radius:12px;width:37px;height:37px;font-size:27px;font-weight:400;letter-spacing:0}.brand-dot{color:var(--muted)}.workspace{margin:38px 0 34px;padding:12px 7px;display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600}.workspace-icon{background:var(--surface-alt);border:1px solid var(--line);display:grid;place-items:center;width:32px;height:32px;border-radius:9px;font-size:14px;color:var(--muted)}.workspace small{display:block;color:var(--muted);font-size:14px;margin-top:5px;font-weight:400}.online,.small-dot{width:6px;height:6px;display:inline-block;background:var(--surface-alt);border-radius:50%}.workspace>.online{margin-left:auto}.nav-label{font-size:14px;letter-spacing:1.8px;color:var(--muted);margin:0 12px 17px}nav{display:grid;gap:6px}nav a{padding:13px 13px;border-radius:8px;color:var(--muted);font-size:14px;display:flex;gap:12px;align-items:center}nav a>span{font-size:18px;width:18px}nav a.selected{background:var(--surface-alt);color:var(--muted);font-weight:650}nav b{margin-left:auto;background:var(--surface-alt);border-radius:5px;font-size:14px;padding:2px 5px}.sidebar-bottom{margin-top:auto;padding:16px 12px 0}.local-badge{font-size:14px;letter-spacing:1.2px;color:var(--muted);display:flex;align-items:center;gap:7px}.sidebar-bottom p{font-size:14px;line-height:1.8;color:var(--muted)}.version{display:block;font-size:14px;letter-spacing:1px;margin-top:24px;color:var(--muted)}main{margin-left:230px}header{height:76px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;padding:0 42px;background:var(--surface)}.breadcrumb{font-size:14px;color:var(--muted)}.breadcrumb span{margin:0 12px;color:var(--muted)}.header-right{display:flex;gap:23px;align-items:center;font-size:14px;color:var(--muted)}.avatar{width:29px;height:29px;border-radius:50%;background:var(--surface-alt);color:var(--muted);display:grid;place-items:center;font-size:14px;font-weight:650}.page{padding:38px 42px 20px;max-width:1600px;margin:auto}.heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:28px}.eyebrow{font-size:14px;letter-spacing:1.8px;font-weight:700;color:var(--muted)}.heading h1{font-size:29px;letter-spacing:-1px;font-weight:600;margin:10px 0 9px}.heading p{font-size:14px;color:var(--muted);margin:0}.heading-actions{display:flex;gap:9px}.button{border:1px solid transparent;border-radius:7px;padding:11px 15px;font-size:14px;font-weight:550;white-space:nowrap;transition:background .15s}.primary{background:var(--teal);color:var(--on-accent)}.primary:hover{background:var(--surface-alt)}.secondary{border-color:var(--line);background:var(--surface);color:var(--muted)}.secondary:hover{background:var(--surface-alt)}.notice{display:flex;align-items:center;gap:12px;padding:15px 18px;background:var(--surface-alt);border:1px solid var(--line);border-radius:9px;margin-bottom:23px}.notice-icon{color:var(--muted);border:1px solid var(--line);border-radius:50%;font-size:14px;width:16px;height:16px;text-align:center;line-height:14px;flex-shrink:0}.notice strong{font-size:14px;margin-right:13px;color:var(--muted)}.notice div>span{font-size:14px;color:var(--muted)}.text-button{margin-left:auto;flex-shrink:0;background:none;border:0;color:var(--muted);font-size:14px;text-decoration:underline;text-underline-offset:3px}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:27px}.metrics article{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:19px 20px}.metric-label{font-size:14px;color:var(--muted);display:flex;justify-content:space-between}.metric-label>span{color:var(--muted)}.metric-value{font-size:29px;font-weight:550;letter-spacing:-.7px;margin:16px 0 12px;font-variant-numeric:tabular-nums}.metric-value small{font-size:14px;color:var(--muted);font-weight:400;margin-left:7px}.metric-value.account-name{font-size:25px}.metric-footer{font-size:14px;color:var(--muted);display:flex;align-items:center;gap:5px}.panel{background:var(--surface);border:1px solid var(--line);border-radius:11px;overflow:hidden}.panel-heading{padding:23px 24px;display:flex;justify-content:space-between;align-items:center;gap:15px}.panel-heading h2{font-size:15px;font-weight:600;margin:0 0 8px}.panel-heading p{font-size:14px;color:var(--muted);margin:0}.chip{border-radius:5px;padding:5px 8px;font-size:14px;font-weight:650;letter-spacing:.6px;white-space:nowrap}.neutral{background:var(--surface-alt);color:var(--muted)}.mint{background:var(--mint);color:var(--muted)}.amber-chip{background:var(--surface-alt);color:var(--muted)}.blue-chip{background:var(--surface-alt);color:var(--muted)}.table-scroll{overflow:auto}table{border-collapse:collapse;width:100%;table-layout:fixed;text-align:left}thead{background:var(--surface-alt)}th{font-size:14px;color:var(--muted);font-weight:550;letter-spacing:.8px;padding:13px 24px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}th:first-child{width:25%}th:nth-child(2),th:nth-child(3){width:24%}th:nth-child(4){width:17%}th:last-child{width:10%;padding-left:0;text-align:center}.last-col{font-size:14px}td{padding:21px 24px;border-bottom:1px solid #f0f3ee;vertical-align:middle}tr.current{background:var(--surface-alt)}.account-cell{display:flex;gap:11px;align-items:center}.account-icon{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--surface-alt);color:var(--muted);font-size:14px;font-weight:600;flex-shrink:0}.account-cell strong{font-size:14px;display:block;font-weight:600}.account-cell small{display:block;color:var(--muted);font-size:14px;margin-top:6px}.account-top{display:flex;align-items:center;gap:7px}.mini-active{width:5px;height:5px;background:var(--surface-alt);border-radius:50%}.quota-top{display:flex;justify-content:space-between;align-items:baseline;gap:4px}.quota-top strong{font-size:14px;font-weight:550;font-variant-numeric:tabular-nums}.quota-top span{font-size:14px;color:var(--muted)}.bar{height:4px;background:var(--surface-alt);border-radius:5px;overflow:hidden;margin:8px 0}.bar-fill{height:100%;background:var(--surface-alt);border-radius:5px}.bar-fill.warning{background:var(--surface-alt)}.bar-fill.low{background:var(--surface-alt)}.quota-reset{font-size:14px;color:var(--muted)}.quota-unknown{color:var(--muted);font-size:14px}.row-state{display:flex;align-items:center;gap:5px;font-size:14px;color:var(--muted)}.row-state.amber{color:var(--muted)}.row-state.active{color:var(--muted)}.toggle-cell{text-align:center;padding:18px 12px}.toggle{appearance:none;width:29px;height:17px;background:var(--surface-alt);border-radius:20px;position:relative;cursor:pointer;vertical-align:middle;transition:.2s}.toggle:checked{background:var(--surface-alt)}.toggle:before{content:"";height:11px;width:11px;background:var(--surface);border-radius:50%;position:absolute;top:3px;left:3px;box-shadow:0 1px 2px #0002;transition:.2s}.toggle:checked:before{transform:translateX(12px)}.table-footer{display:flex;justify-content:space-between;padding:15px 24px;gap:10px;font-size:14px;color:var(--muted)}.bottom-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:22px;margin-top:23px}.strategy-panel .panel-heading{padding-bottom:18px}.strategy-panel h2{font-size:18px;margin:10px 0 0;letter-spacing:-.4px}.strategy-tabs{display:flex;margin:0 24px;background:var(--surface-alt);border-radius:7px;padding:4px;gap:4px}.strategy-tabs button{flex:1;border:0;background:none;padding:9px 5px;font-size:14px;color:var(--muted);border-radius:5px}.strategy-tabs button.active{background:var(--surface);box-shadow:0 1px 4px #1d402a12;color:var(--muted);font-weight:650}.strategy-description{font-size:14px;line-height:1.8;color:var(--muted);margin:14px 24px 20px;min-height:35px}.setting{padding:0 24px;margin-bottom:22px}.setting label{display:flex;justify-content:space-between;font-size:14px;color:var(--muted);gap:10px}.setting strong{font-size:14px;color:var(--muted);font-weight:550}.setting input{width:100%;margin:15px 0 7px;accent-color:#4d8b65;cursor:pointer;height:4px}.range-labels{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}.policy-summary{margin:0 24px 15px;font-size:14px;color:var(--muted);background:var(--surface-alt);border:1px solid var(--line);border-radius:7px;line-height:1.8;padding:12px 15px}.method-note{padding:0 24px 22px;color:var(--muted);font-size:14px;line-height:1.7}.decision-panel{background:var(--surface-alt);border-color:var(--line)}.decision-panel .panel-heading{padding-bottom:12px}.signal{color:var(--muted);font-size:20px}.decision-panel>h2{font-size:22px;font-weight:550;letter-spacing:-.5px;margin:0 24px 10px}.decision-panel>p{font-size:14px;line-height:1.8;color:var(--muted);margin:0 24px 20px}.route{margin:0 24px 22px;border:1px solid var(--line);border-radius:9px;background:var(--surface-alt);padding:17px 19px;display:flex;align-items:center;justify-content:space-between}.route-label{display:block;font-size:14px;letter-spacing:1.1px;color:var(--muted);margin-bottom:8px}.route strong{font-size:16px;font-weight:550;color:var(--muted)}.route-arrow{color:var(--muted);font-size:20px}.ranking-label{font-size:14px;letter-spacing:1px;color:var(--muted);margin:0 24px 10px}#ranking{margin:0 24px 18px}.rank{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #e2eadf;font-size:14px;color:var(--muted)}.rank-number{font-size:14px;width:13px;color:var(--muted)}.rank-score{margin-left:auto;font-size:14px}.full{display:flex;width:calc(100% - 48px);justify-content:space-between;margin:0 24px 12px}.execution-note{text-align:center;color:var(--muted);font-size:14px;padding:0 16px 23px;line-height:1.6}.execution-note strong{font-weight:500;color:var(--muted)}.connections{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:26px;border:1px dashed #dce4d9;border-radius:9px;padding:17px 24px}.connections>div{display:flex;gap:12px;align-items:center}.connections>div>span:first-child{font-size:21px;color:var(--muted)}.connections strong{display:block;font-size:14px;font-weight:550;color:var(--muted)}.connections small{font-size:14px;color:var(--muted);display:block;margin-top:5px}.status-dot{width:5px;height:5px;border-radius:50%;margin-left:auto}.status-dot.amber{background:var(--surface-alt)}.status-dot.green{background:var(--surface-alt)}footer{display:flex;justify-content:space-between;color:var(--muted);font-size:14px;letter-spacing:1.5px;padding:26px 0 4px}footer span{letter-spacing:0;font-size:14px}.error{padding:12px 16px;color:var(--muted);background:var(--surface-alt);border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:18px}dialog{border:1px solid var(--line);border-radius:14px;max-width:600px;width:calc(100% - 32px);padding:26px;box-shadow:0 20px 80px #12332130;color:var(--ink)}dialog::backdrop{background:var(--surface-alt);backdrop-filter:blur(3px)}.dialog-header{display:flex;justify-content:space-between;align-items:center}.dialog-header h2{font-size:22px;font-weight:550}.icon-button{background:none;border:0;font-size:26px;color:var(--muted);padding:8px}#plan-content p{font-size:14px;line-height:1.8;color:var(--muted)}#plan-content ol{padding-left:25px}#plan-content li{padding:9px 0 9px 8px;font-size:14px;line-height:1.6}.dialog-footer{display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--line);padding-top:20px;margin-top:18px}button:disabled{opacity:.45;cursor:default}
+@media(min-width:1600px){.page{padding-top:45px}}@media(max-width:1200px){.sidebar{width:190px;padding-left:16px;padding-right:16px}main{margin-left:190px}.page{padding:30px 25px}header{padding:0 25px}.heading h1{font-size:25px}.metrics{gap:10px}.metrics article{padding:16px 14px}.heading-actions{flex-direction:column}.notice div>span{display:block;margin-top:5px}td,th{padding-left:15px;padding-right:15px}.table-footer{font-size:14px}.connections{padding:15px}}@media(max-width:900px){.sidebar{width:72px;padding:27px 12px}.brand{padding:0;font-size:0}.brand-icon{font-size:25px}.workspace,.nav-label,.sidebar-bottom{display:none}nav{margin-top:40px}nav a{font-size:0;padding:12px;gap:0}nav a>span{font-size:20px}nav b{display:none}main{margin-left:72px}.metrics{grid-template-columns:repeat(2,1fr)}.bottom-grid{grid-template-columns:1fr}.connections{grid-template-columns:1fr;gap:18px}.connections>div{max-width:350px}.heading{align-items:flex-start}.heading h1{font-size:24px}table{min-width:730px}.heading-actions{flex-direction:row}.heading-actions .button{font-size:0}.heading-actions .button:first-letter{font-size:17px}.table-footer{flex-direction:column}.notice{align-items:flex-start}.notice strong{line-height:1.7}.text-button{margin-top:3px}}@media(max-width:540px){.sidebar{display:none}main{margin-left:0}.page{padding:25px 16px}header{height:55px;padding:0 16px}.heading{gap:10px}.heading h1{font-size:21px;line-height:1.3}.heading p{font-size:14px;line-height:1.7}.eyebrow{font-size:14px;letter-spacing:1.2px}.heading-actions{gap:5px}.heading-actions .button{padding:9px}.metrics article{padding:16px 13px}.metric-label{font-size:14px}.metric-value{font-size:25px}.metric-footer{font-size:14px}.panel-heading{padding:20px}.panel-heading p{font-size:14px;line-height:1.6}.notice{padding:12px;gap:8px}.notice div>span{font-size:14px;line-height:1.6}.notice strong{font-size:14px}.text-button{font-size:14px}footer{gap:20px;font-size:14px}footer span{font-size:14px;line-height:1.6}.strategy-tabs,.route,#ranking{margin-left:20px;margin-right:20px}.setting{padding:0 20px}}
+
+.account-help{font-size:14px;line-height:1.8;color:var(--muted)}.capture-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:15px 0}.capture-controls label{width:100%;font-size:14px}.capture-controls input{padding:10px;border:1px solid var(--line);border-radius:6px;min-width:160px;flex:1}.saved-account{display:flex;justify-content:space-between;gap:15px;align-items:center;border-top:1px solid #e7ece9;padding:16px 0}.saved-account strong{display:block;font-size:14px}.saved-account small{display:block;color:var(--muted);font-size:14px;margin-top:6px}
+
+.metric-value.account-name{font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-top:7px;padding-bottom:6px}.account-cell strong,.route strong{overflow-wrap:anywhere}#account-dialog{max-width:820px}.saved-account{display:grid;grid-template-columns:minmax(150px,1fr) minmax(180px,1.15fr) auto;gap:14px}.saved-details{min-width:0;overflow-wrap:anywhere}.saved-details .chip{display:inline-block;margin-top:8px}.alias-editor{display:flex;gap:6px}.alias-editor input{min-width:0;width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:14px}.account-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}.danger-outline{background:var(--surface);border-color:var(--line);color:var(--muted)}.danger{background:var(--surface-alt);color:var(--on-accent)}.login-status{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px;background:var(--surface-alt);border-radius:8px;font-size:14px;line-height:1.7;margin-bottom:12px}.login-status[hidden]{display:none}.login-status>span{width:100%}@media(max-width:740px){.saved-account{grid-template-columns:1fr}.account-actions{justify-content:flex-start}.metric-value.account-name{font-size:14px}}
+
+.account-refresh{margin-top:8px;padding:5px 10px;font-size:14px}.quota-countdown{font-variant-numeric:tabular-nums;margin-top:5px}
+
+.rotation-runner{margin-top:24px}.runner-content{padding:0 24px 24px}.runner-actions{display:flex;gap:10px;flex-wrap:wrap}.rotation-option{display:flex;gap:10px;margin:18px 0;line-height:1.6}#rotation-dialog{max-width:820px}#rotation-sessions{max-height:320px;overflow:auto}.rotation-session{display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}.rotation-session small{display:block;color:var(--muted);overflow-wrap:anywhere;margin-top:5px}.handoff-artifact{display:block;margin-top:12px;overflow-wrap:anywhere}.runner-content p{line-height:1.7}#rotation-artifacts code{user-select:all}
+
+.managed-workflow{border-top:1px solid var(--line);padding:16px 0;margin-top:16px}.managed-workflow summary{cursor:pointer;font-weight:600}.binding-row{overflow-wrap:anywhere}.binding-row small,.binding-row code{display:block;font-size:14px;margin-top:4px}.managed-workflow input,.managed-workflow select{max-width:100%;padding:8px;border:1px solid var(--line);border-radius:6px}.managed-workflow .runner-actions{margin:12px 0}.managed-history{font-size:14px;line-height:1.8;padding-left:20px}
+
+/* Readable theme tokens, shared by every page and dialog. */
+:root{color-scheme:light;--ink:#142337;--muted:#425466;--line:#c5cfda;--surface:#fff;--surface-alt:#edf2f7;--bg:#f3f6fa;--teal:#12634d;--mint:#ddf2e7;--on-accent:#fff;--amber:#865300;--danger:#b42318}
+:root[data-theme="dark"]{color-scheme:dark;--ink:#edf4ff;--muted:#b8c6da;--line:#40516a;--surface:#162032;--surface-alt:#202d43;--bg:#0b1220;--teal:#67e0b3;--mint:#143d34;--on-accent:#092218;--amber:#ffd080;--danger:#ffadab}
+body{font-size:16px;line-height:1.6}.page{max-width:1760px;padding:32px}.sidebar{width:250px;padding:28px 18px;overflow-y:auto}main{margin-left:250px}header{padding:0 32px;height:auto;min-height:80px;gap:16px}.header-right{flex-wrap:wrap;gap:12px}.theme-label{font-size:14px;color:var(--ink)}#theme-select{padding:8px;border:1px solid var(--line);border-radius:8px}
+nav a{font-size:16px;padding:12px}nav a.selected{background:var(--mint);color:var(--teal)}nav a:hover{background:var(--surface-alt)}.heading{flex-wrap:wrap}.heading h1,.account-management h1{font-size:30px;line-height:1.25}.heading p{font-size:16px}.heading-actions{flex-wrap:wrap}.panel-heading h2{font-size:21px}.button{font-size:15px;min-height:42px}.metric-value.account-name{font-size:20px;white-space:normal;overflow-wrap:anywhere}.metric-value{font-size:30px}.metric-label,.metric-footer{font-size:14px}.panel-heading p{font-size:15px}.primary{background:var(--teal);color:var(--on-accent)}.primary:hover{filter:brightness(.9);background:var(--teal)}.secondary,.icon-button{color:var(--ink)}.secondary:hover{background:var(--surface-alt)}.notice{background:var(--surface-alt)}.notice strong,.notice div>span{color:var(--ink)}.neutral{background:var(--surface-alt);color:var(--muted)}.mint,.row-state.active,.setting strong{color:var(--teal)}.row-state.amber,.amber-chip{color:var(--amber)}.danger-outline,.error{color:var(--danger);background:var(--surface)}.danger{background:#a32828;color:#fff}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border-color:var(--line);accent-color:var(--teal)}input::placeholder{color:var(--muted);opacity:1}dialog{background:var(--surface);color:var(--ink)}.account-management{max-width:1400px}.account-management .dialog-header{margin-bottom:20px}.account-management .icon-button{font-size:15px}.account-help{font-size:15px;color:var(--muted);line-height:1.7}.saved-account strong{font-size:17px}.saved-account small{font-size:14px}.saved-account input{font-size:16px}.capture-controls label{font-size:16px;font-weight:600}.capture-controls input{font-size:16px}#saved-accounts{margin-top:24px}
+.table-scroll table{min-width:1080px;table-layout:auto}th{font-size:13px;color:var(--muted);letter-spacing:.03em;padding:16px}td{font-size:15px;padding:20px 16px;border-color:var(--line)}th:first-child{width:23%}th:nth-child(2),th:nth-child(3){width:18%}th:nth-child(4){width:30%}th:last-child{width:11%}.account-cell strong{font-size:16px}.account-cell small,.quota-top span,.quota-reset,.quota-countdown,.table-footer,.method-note,.execution-note,.connections small,footer,footer span{font-size:14px}.quota-top strong{font-size:23px}.row-state{font-size:15px}.bar{height:8px;background:var(--line)}.bar-fill{background:var(--teal)}.bar-fill.warning{background:var(--amber)}.bar-fill.low{background:var(--danger)}.toggle{background:var(--line);width:38px;height:24px}.toggle:checked{background:var(--teal)}.toggle:before{background:var(--surface);width:18px;height:18px}.toggle:checked:before{transform:translateX(14px)}.strategy-description,.policy-summary,.decision-panel>p{font-size:15px}.setting label{font-size:16px}.range-labels{font-size:14px}.connections strong{font-size:16px}.account-refresh{font-size:14px}.binding-row code,.binding-row small,.managed-history{font-size:14px}.route strong{font-size:18px}.button:disabled{opacity:.65}.sidebar-bottom p,.version{color:var(--muted)}[hidden]{display:none!important}
+@media(max-width:1100px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.bottom-grid{grid-template-columns:1fr}.saved-account{grid-template-columns:1fr}.account-actions{justify-content:flex-start}}
+@media(max-width:760px){.sidebar{position:static;width:auto;padding:16px}.sidebar nav{display:flex;flex-wrap:wrap}.sidebar-bottom,.workspace,.nav-label{display:none}main{margin-left:0}.page{padding:20px 16px}header{padding:16px;flex-wrap:wrap}.metrics{grid-template-columns:1fr 1fr}.heading h1{font-size:26px}.metric-value.account-name{font-size:18px}.connections{grid-template-columns:1fr}.brand{font-size:28px}.theme-label{display:none}}
+
+.relay-logs{margin:24px 0}.relay-logs pre{max-height:360px;min-height:140px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);color:var(--text);border:1px solid currentColor;border-radius:8px;padding:16px;font-size:14px;line-height:1.6}.relay-logs label{display:block;margin-bottom:12px}
+</style></head>
+<body>
+<aside class="sidebar"><a class="brand" href="#overview" aria-label="Codex Relay"><span class="brand-icon">↗</span><span>relay<span class="brand-dot">.</span></span></a><div class="workspace"><span class="workspace-icon">TB</span><div>Local workspace<small>Chỉ trên máy của bạn</small></div><span class="online"></span></div><p class="nav-label">WORKSPACE</p><nav><a class="selected" href="#overview"><span>◫</span> Tổng quan</a><a href="#accounts"><span>▤</span> Tài khoản <b id="nav-count">4</b></a><a href="#rotation"><span>⇄</span> Chiến lược rotate</a><a id="manage-accounts" href="#login"><span>◎</span> Quản lý đăng nhập</a><a href="#connection"><span>⌘</span> Kết nối</a></nav><div class="sidebar-bottom"><div class="local-badge"><span class="online"></span> LOCAL ONLY</div><p>Dữ liệu quota ở trên máy.<br>Không gửi lên hosting.</p><span class="version">RELAY / EXPERIMENTAL 0.2</span></div></aside>
+<main id="overview"><header><div class="breadcrumb">Workspace <span>/</span> Tổng quan</div><div class="header-right"><label class="theme-label" for="theme-select">Giao diện</label><select id="theme-select" aria-label="Giao diện sáng tối"><option value="system">Theo hệ thống</option><option value="light">Sáng</option><option value="dark">Tối</option></select><span id="clock"></span><span class="avatar">TB</span></div></header>
+<section class="page" id="dashboard-page"><div class="heading"><div><div class="eyebrow">ACCOUNT CONTROL CENTER</div><h1>Một nơi cho mọi tài khoản.</h1><p>Theo dõi quota, giữ mạch công việc, chuyển đúng thời điểm.</p></div><div class="heading-actions"><input id="import-file" type="file" accept="application/json,.json" hidden><button id="import" class="button secondary">↥ Nhập snapshot</button><button id="refresh" class="button primary">↻ Đọc lại dữ liệu</button></div></div>
+<div class="notice" id="notice"><span class="notice-icon">i</span><div><strong id="mode-title">Đang tải dữ liệu</strong><span id="mode-text">Đang kết nối dashboard local…</span></div><button id="demo" class="text-button">Xem demo</button></div>
+<div id="error" role="alert" class="error" hidden></div>
+<div class="metrics"><article><div class="metric-label">Tài khoản thiết lập <span>▤</span></div><div class="metric-value" id="count">—</div><div class="metric-footer">Standard seats · metadata</div></article><article><div class="metric-label">Sẵn sàng nhận phiên mới <span>↗</span></div><div class="metric-value"><span id="ready">—</span><small id="ready-total"></small></div><div class="metric-footer"><span class="small-dot"></span> Đủ phần dự phòng</div></article><article><div class="metric-label">Account đang sử dụng <span>◉</span></div><div class="metric-value account-name" id="active-name">—</div><div class="metric-footer" id="active-note">Chưa có dữ liệu</div></article><article><div class="metric-label">Độ mới của dữ liệu <span>◷</span></div><div class="metric-value" id="freshness">—</div><div class="metric-footer" id="source">Chưa kết nối tài khoản</div></article></div>
+<section class="panel accounts-panel" id="accounts"><div class="panel-heading"><div><h2>Quota Codex</h2><p>Bucket Codex · quota 5 giờ và tuần · dùng để lập kế hoạch rotate Codex</p></div><span class="chip neutral" id="snapshot-badge">SNAPSHOT</span></div><div class="table-scroll"><table><thead><tr><th>TÀI KHOẢN</th><th>CODEX · 5 GIỜ CÒN</th><th>CODEX · TUẦN CÒN</th><th>TRẠNG THÁI</th><th class="last-col">THAM GIA ROTATE</th></tr></thead><tbody id="accounts-body"></tbody></table></div><div class="table-footer"><span>◷ Reset là lịch được báo cáo; luôn cần refresh để xác nhận quota mới.</span><span id="token-summary">Tokens / chi phí: chưa có dữ liệu</span></div></section>
+<div class="bottom-grid"><section class="panel strategy-panel" id="rotation"><div class="panel-heading"><div><div class="eyebrow">SMART ROTATION</div><h2>Giữ mạch. Chuyển có lý do.</h2></div><span class="chip mint">PLAN ONLY</span></div><div class="strategy-tabs" role="group" aria-label="Chiến lược"><button data-strategy="balanced" class="active">Cân bằng quota</button><button data-strategy="reset_first">Ưu tiên tuần &amp; reset</button></div><p class="strategy-description" id="strategy-description"></p><div class="setting"><label for="reserve">Dự phòng cho bàn giao <strong><span id="reserve-value">15</span>%</strong></label><input type="range" min="1" max="40" step="1" value="15" id="reserve"><div class="range-labels"><span>Ưu tiên dùng hết</span><span>Ưu tiên dư địa</span></div></div><div class="setting"><label for="margin">Dư địa thêm khi nhận phiên mới <strong><span id="margin-value">10</span> điểm %</strong></label><input type="range" min="0" max="20" step="5" value="10" id="margin"><div class="range-labels"><span>Ít hạn chế hơn</span><span>Giảm đổi qua lại</span></div></div><div class="policy-summary" id="policy-summary"></div><div class="method-note">Heuristic minh bạch, không bảo đảm tối ưu tuyệt đối. Chưa có lịch sử tiêu thụ để dự đoán thời lượng phiên.</div></section>
+<section class="panel decision-panel"><div class="panel-heading"><div class="eyebrow">ĐỀ XUẤT HIỆN TẠI</div><span class="signal">✦</span></div><h2 id="decision-title">Đang tính…</h2><p id="decision-copy"></p><div class="route"><div><span class="route-label">ĐANG DÙNG</span><strong id="route-from">—</strong></div><span class="route-arrow">→</span><div><span class="route-label">ĐỀ XUẤT TIẾP</span><strong id="route-to">—</strong></div></div><div class="ranking-label">THỨ TỰ ỨNG VIÊN</div><div id="ranking"></div><button class="button primary full" id="preview">Xem kế hoạch bàn giao <span>↗</span></button><div class="execution-note">Thực thi rotate: cấu hình trong phần Compact · bàn giao · đổi tài khoản bên dưới</div></section></div>
+<section class="panel rotation-runner" id="rotation-runner"><div class="panel-heading"><div><div class="eyebrow">ROTATION &amp; CONTEXT</div><h2>Compact · bàn giao · đổi tài khoản</h2><p>Thực thi khi Codex desktop, VS Code và CLI đã đóng. Có thể chọn tự đóng/mở lại desktop trong popup xác nhận.</p></div><span class="chip neutral" id="rotation-phase">Chưa cấu hình</span></div><div class="runner-content"><p id="rotation-message" role="status">Chọn cuộc trò chuyện cần bàn giao trước khi bật tự động.</p><p id="rotation-config-summary"></p><div class="runner-actions"><button class="button secondary" id="rotation-settings">Chọn chat &amp; cấu hình</button><button class="button secondary" id="rotation-checkpoint">Force compact &amp; export</button><button class="button primary" id="rotation-start">Rotate ngay</button><button class="button secondary" id="force-switch">Force switch account</button><button class="button secondary" id="rotation-cancel">Hủy / tắt tự động</button><button class="button secondary" id="rotation-recovery">Xác nhận sau phục hồi</button></div><div id="rotation-artifacts"></div><section class="relay-logs"><h3>Nhật ký hoạt động</h3><p id="relay-log-status" class="account-help"></p><label><input type="checkbox" id="relay-log-follow" checked> Tự cuộn theo log mới</label><pre id="relay-log-output" tabindex="0" aria-label="Lịch sử hoạt động Relay"></pre><p class="account-help">Lưu tối đa 2.000 mốc xử lý qua các lần restart. Không chứa nội dung handoff hoặc thông tin đăng nhập.</p></section><div id="managed-workflows"></div><p class="account-help">Mở dashboard bằng Safari/Chrome riêng và chạy server trong Terminal trước khi đóng client. Sau import, mở lại client và chọn thread được quản lý. Nếu bật tiếp tục, Relay chạy một lượt công việc local trong app-server riêng; không tự điều khiển giao diện client.</p></div></section>
+<section id="connection" class="connections"><div><span>⌘</span><div><strong>Codex desktop</strong><small>Hỗ trợ tự đóng/mở lại khi xác nhận</small></div><span class="status-dot amber"></span></div><div><span>⌥</span><div><strong>VS Code extension</strong><small>Cần đóng trước khi đổi tài khoản</small></div><span class="status-dot amber"></span></div><div><span>◇</span><div><strong>Đăng nhập & credentials</strong><small>Phiên đăng nhập chỉ xử lý trên máy</small></div><span class="status-dot green"></span></div></section><footer>CODEX RELAY <span>Rotate có journal phục hồi · chỉ đổi tài khoản khi client đã đóng.</span></footer></section><section id="account-dialog" class="page account-management" hidden><div class="dialog-header"><div><div class="eyebrow">LOCAL FILE AUTH</div><h1>Quản lý đăng nhập</h1></div><button id="close-accounts" class="icon-button" aria-label="Về tổng quan">← Tổng quan</button></div><p class="account-help">Mở dashboard trong Safari/Chrome riêng. Lưu công việc, đóng Codex desktop, VS Code và các phiên CLI trước khi chuyển. Đổi file đăng nhập không tự compact hoặc chuyển context.</p><p class="account-help">Thêm tài khoản qua đăng nhập Codex chính thức hoặc lưu đăng nhập local hiện tại. Alias để trống sẽ hiển thị email. Token chỉ lưu trên máy.</p><div class="capture-controls"><label for="profile-name">Alias tùy chọn</label><input id="profile-name" maxlength="80" placeholder="Ví dụ: Work 1"><button id="capture-account" class="button secondary">Lưu đăng nhập hiện tại</button><button id="login-account" class="button primary">Thêm tài khoản qua đăng nhập</button></div><div id="account-message" role="status" class="account-help"></div><div id="login-status" class="login-status" hidden><span id="login-status-text"></span><a id="login-link" class="button primary" target="_blank" rel="noopener noreferrer" hidden>Mở trang đăng nhập OpenAI</a><button id="cancel-login" class="button secondary">Hủy đăng nhập</button></div><div class="capture-controls"><label for="backup-password">Mật khẩu file backup (ít nhất 12 ký tự)</label><input id="backup-password" type="password" autocomplete="new-password" minlength="12"><p class="account-help">File mã hóa chứa phiên đăng nhập. Giữ file và mật khẩu riêng, không chia sẻ. Import giữ nguyên profile trùng đã có trên máy.</p><button id="export-accounts" class="button secondary">Export tài khoản</button><button id="import-accounts" class="button secondary">Import tài khoản</button><input id="backup-file" type="file" accept=".json" hidden></div><div id="saved-accounts"></div><div class="dialog-footer"><button id="restore-account" class="button secondary">Khôi phục chuyển bị gián đoạn</button><button id="refresh-accounts" class="button primary">Đọc lại danh sách</button></div></section></main>
+<dialog id="plan-dialog"><div class="dialog-header"><div><div class="eyebrow">HANDOFF PREVIEW</div><h2>Kế hoạch chuyển phiên</h2></div><button id="close-dialog" class="icon-button" aria-label="Đóng">×</button></div><div id="plan-content"></div><div class="dialog-footer"><button class="button secondary" id="download">↓ Tải kế hoạch JSON</button><button class="button primary" id="done">Đã hiểu</button></div></dialog>
+
+<dialog id="delete-account-dialog"><h2>Gỡ tài khoản khỏi Relay?</h2><p id="delete-account-label" class="account-help"></p><p class="account-help">Xóa profile và credential đã lưu của profile này. Không xóa tài khoản OpenAI, không thay đăng nhập Codex đang dùng. Các bản sao khôi phục trước đây được giữ nguyên.</p><div class="dialog-footer"><button id="cancel-delete-account" class="button secondary">Giữ lại</button><button id="confirm-delete-account" class="button danger">Gỡ profile</button></div></dialog>
+<dialog id="rotation-dialog"><div class="dialog-header"><h2>Cấu hình rotate &amp; handoff</h2><button id="rotation-close" class="icon-button" aria-label="Đóng cấu hình rotate">×</button></div><p class="account-help">Chọn tối đa 10 chat local. Compact và tạo handoff sử dụng quota thật. Bản gốc được sao lưu trước khi compact; context được nạp vào thread đã liên kết, hoặc tạo mới nếu account đích chưa có.</p><p class="account-help">Mỗi chuỗi dùng một alias chung cho mọi account. Thread mới được đặt tên theo alias; đổi alias sẽ đồng bộ tên các thread đã liên kết khi client đã đóng.</p><h3>Luồng đã quản lý</h3><div id="rotation-workflows"></div><h3>Đăng ký chat mới trên account hiện tại</h3><div id="rotation-sessions"></div><label class="rotation-option"><input id="rotation-auto" type="checkbox"> Tự bắt đầu rotate khi quota chạm ngưỡng; chờ client đóng để thực thi</label><label class="rotation-option"><input id="rotation-continue" type="checkbox"> Sau import, Relay tiếp tục một lượt công việc local (cho phép sửa file trong project, tắt mạng, không tự chấp thuận yêu cầu quyền)</label><p id="rotation-dialog-error" role="status"></p><div class="dialog-footer"><button class="button primary" id="rotation-save">Lưu cấu hình</button></div></dialog>
+<dialog id="rotation-confirm-dialog"><h2 id="rotation-confirm-title"></h2><div id="rotation-confirm-content"></div><label><input type="checkbox" id="rotation-restart-desktop"> Tự đóng và mở lại Codex desktop / ChatGPT.app cho phiên này</label><p>App sẽ đóng trước compact và mở lại sau khi job kết thúc an toàn. Lưu công việc trước; chạy server ở Terminal riêng và mở dashboard bằng Safari/Chrome. Không force kill; VS Code/CLI vẫn cần đóng.</p><p>Compact và tạo tóm tắt sử dụng quota thật. Relay chờ các client đóng trước khi thực hiện.</p><div class="dialog-footer"><button class="button secondary" id="rotation-confirm-cancel">Hủy</button><button class="button primary" id="rotation-confirm-run">Xác nhận thực hiện</button></div></dialog><dialog id="force-switch-dialog"><h2>Force switch account</h2><p>Đổi đăng nhập trực tiếp sang account bạn chọn, không xét quota. Không compact hoặc bàn giao context. Cần đóng client trước khi đổi và mở lại sau đó. Journal cũ được giữ.</p><label>Account đích <select id="force-switch-target"></select></label><p id="force-switch-error" role="alert"></p><div class="dialog-footer"><button class="button secondary" id="force-switch-cancel">Hủy</button><button class="button primary" id="force-switch-confirm">Xác nhận đổi account</button></div></dialog><script nonce="QG_xHCknJuCbH76BXRusgdJXtidB7iXU">/* Standalone browser adapter. No network, filesystem, credential or app access. */
+'use strict';
+(() => {
+  const number = n => typeof n === 'number' && Number.isFinite(n);
+  const forbidden = new Set(['access_token','refresh_token','id_token','openai_api_key','authorization','password','client_secret','tokens','auth.json']);
+  function metadata(value, depth = 0) {
+    if (depth > 24) throw new Error('Snapshot quá sâu.');
+    if (value && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) {
+        if (forbidden.has(key.toLowerCase())) throw new Error('Chỉ nhận metadata quota; không nhập credentials.');
+        metadata(child, depth + 1);
+      }
+    }
+  }
+  function options(raw = {}) {
+    const result = {reserve:raw.reserve ?? 15, margin:raw.margin ?? 10, strategy:raw.strategy ?? 'reset_first', disabled:raw.disabled ?? []};
+    if (!number(result.reserve) || result.reserve < 1 || result.reserve > 40 || !number(result.margin) || result.margin < 0 || result.margin > 20 || !['balanced','reset_first'].includes(result.strategy) || !Array.isArray(result.disabled) || result.disabled.length > 100 || result.disabled.some(k => typeof k !== 'string')) throw new Error('Cài đặt không hợp lệ.');
+    return result;
+  }
+  function demo(now) {
+    return {received_at:now, result:{schema_version:1,command:'list',active_account_key:'demo-1',accounts:[
+      ['Studio',93,38,62],['Build',22,31,210],['Research',48,67,95],['Reserve',12,18,285]
+    ].map(([name,short,week,reset],i) => ({account_key:`demo-${i+1}`,alias:name,auth_mode:'chatgpt',active:i===0,
+      usage:{source:'api',refresh:{requested:true,method:'api',status:'ok'},
+        primary:{used_percent:short,window_minutes:300,resets_at:now+reset*60},
+        secondary:{used_percent:week,window_minutes:10080,resets_at:now+(3+i)*86400}}}))}};
+  }
+  function build(packet, raw = {}, now = Date.now()/1000, isDemo = false) {
+    metadata(packet);
+    const opts = options(raw), received = packet?.received_at, doc = packet?.result;
+    if (!number(received) || received > now || now-received > 1e12 || doc?.schema_version !== 1 || doc.command !== 'list' || doc.error || !Array.isArray(doc.accounts) || (doc.active_account_key !== null && (typeof doc.active_account_key !== 'string' || !doc.active_account_key))) throw new Error('Snapshot không hợp lệ hoặc không đúng schema.');
+    const seen = new Set(), threshold = 100-opts.reserve, entry = opts.strategy==='reset_first'?Math.min(70,Math.max(1,threshold-opts.margin)):Math.max(1,threshold-opts.margin);
+    const accounts = doc.accounts.map(a => {
+      if (!a || typeof a.account_key !== 'string' || !a.account_key || seen.has(a.account_key) || typeof a.active !== 'boolean' || a.active !== (a.account_key === doc.active_account_key)) throw new Error('Định danh hoặc account đang dùng không nhất quán.');
+      seen.add(a.account_key);
+      const usage = a.usage || {}, refresh = usage.refresh || {}, windows = [];
+      let reason = '';
+      if (typeof usage !== 'object' || Array.isArray(usage) || typeof refresh !== 'object' || Array.isArray(refresh)) throw new Error('Usage không hợp lệ.');
+      if (a.auth_mode !== 'chatgpt') reason = 'Unsupported auth mode';
+      else if (usage.source !== 'api' || refresh.requested !== true || refresh.method !== 'api' || refresh.status !== 'ok') reason = 'Refresh unavailable';
+      for (const field of ['primary','secondary']) {
+        const w = usage[field]; if (w == null) continue;
+        if (!number(w.used_percent) || w.used_percent < 0 || w.used_percent > 100) { reason = 'Invalid window'; continue; }
+        if (w.resets_at != null && (!number(w.resets_at) || w.resets_at <= now)) reason = 'Expired window';
+        windows.push({used:w.used_percent,minutes:w.window_minutes,resets_at:w.resets_at});
+      }
+      if (!windows.length) reason = reason || 'Windows unavailable';
+      const observed=usage.observed_at ?? received;
+      if (!number(observed) || observed>now) reason='Invalid measurement timestamp';
+      const excluded = opts.disabled.includes(a.account_key), stale = now-observed>60;
+      const usable = !reason && !excluded && !stale;
+      const eligible = usable && windows.every(w => w.used<entry);
+      const keep = usable && windows.every(w => w.used<threshold);
+      const bottleneck = windows.length ? 100-Math.max(...windows.map(w=>w.used)) : null;
+      const short = windows.find(w=>w.minutes===300) || null, weekly=windows.find(w=>w.minutes===10080) || null;
+      let bonus=0,score=eligible?bottleneck:null;
+      if(eligible && opts.strategy==='reset_first' && short && weekly){
+        const urgency=w=>number(w.resets_at)&&w.resets_at>now?Math.max(0,1-(w.resets_at-now)/(w.minutes*60)):0;
+        const sr=100-short.used,wr=100-weekly.used;
+        const rawBonus=wr*.20*urgency(weekly)+sr*.05*urgency(short);
+        bonus=Math.round(rawBonus*100)/100;
+        score=Math.round((wr*.45+sr*.20+bottleneck*.10+rawBonus)*100)/100;
+      }
+      return {id:a.account_key,name:typeof a.alias==='string' && a.alias ? a.alias:typeof a.email==='string' && a.email ? a.email:a.account_key,active:a.active,short,weekly,windows,eligible,excluded,bottleneck_remaining:bottleneck,score,reset_bonus:bonus,can_keep:keep,
+        reason:excluded?'Đã tạm loại khỏi vòng rotate':stale?'Dữ liệu đã cũ; cần đọc quota mới':reason?'Quota chưa được xác nhận':!eligible?'Chưa đủ dư địa cho một phiên mới':'Đủ quota ở tất cả cửa sổ được báo cáo'};
+    });
+    const active=accounts.find(a=>a.active); if (!active && doc.active_account_key !== null) throw new Error('Không có account đang dùng.');
+    const ranked=accounts.filter(a=>!a.active && a.eligible).sort((a,b)=>b.score-a.score || a.id.localeCompare(b.id));
+    let waitUntil=null;
+    const activeUsage=doc.accounts.find(a=>a.active)?.usage || {};
+    if(active && !active.can_keep && !active.excluded && activeUsage.refresh?.status==='ok' && now-(activeUsage.observed_at ?? received)<=60){
+      const limiting=active.windows.filter(w=>w.used>=threshold);
+      if(limiting.length && limiting.every(w=>number(w.resets_at)&&w.resets_at>now&&w.resets_at-now<=300))waitUntil=Math.max(...limiting.map(w=>w.resets_at))+1;
+    }
+    const action=!active?'pause':active.can_keep?'keep':waitUntil?'wait_reset':ranked.length?'handoff':'pause';
+    return {demo:isDemo,received_at:received,now,stale:now-received>60,accounts,active:active?.id || null,target:action==='handoff'?ranked[0].id:null,ranking:ranked.map(a=>a.id),action,reset_wait_until:waitUntil,settings:opts,threshold,entry_threshold:entry,execution_enabled:false,integration:{desktop:'unverified',vscode:'unverified'},csrf:'offline'};
+  }
+  let imported=null, currentOptions=options(), demoEnabled=false;
+  globalThis.RELAY_LOCAL = {
+    build, demo,
+    async request(path,data) {
+      try {
+        const now=Date.now()/1000;
+        if (path==='/api/settings') currentOptions=options(data);
+        else if (path==='/api/import') { build(data,currentOptions,now); imported=data; }
+        else if (path==='/api/demo') { imported=null; demoEnabled=true; }
+        else if (path!=='/api/state') throw new Error('Unknown operation');
+        const empty={received_at:now,result:{schema_version:1,command:'list',active_account_key:null,accounts:[]}};
+        const result=build(imported || (demoEnabled ? demo(now) : empty),currentOptions,now,demoEnabled && imported===null);
+        return {ok:true,async json(){return result;}};
+      } catch(error) { return {ok:false,async json(){return {error:error.message};}}; }
+    }
+  };
+})();
+
+'use strict';
+let view = null;
+let busy = false;
+const $ = id => document.getElementById(id);
+const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = text; return el; };
+const fmt = new Intl.NumberFormat('vi-VN', {maximumFractionDigits: 1});
+const pct = n => `${fmt.format(n)}%`;
+function until(ts) {
+  if (!Number.isFinite(ts)) return 'Chưa có lịch reset';
+  const sec = ts - Date.now() / 1000;
+  if (sec <= 0) return 'Đến lịch reset · cần xác nhận lại';
+  const minutes = Math.ceil(sec / 60);
+  if (minutes >= 1440) return `Reset sau ${Math.floor(minutes / 1440)}n ${Math.floor(minutes % 1440 / 60)}h`;
+  if (minutes >= 60) return `Reset sau ${Math.floor(minutes / 60)}h ${minutes % 60}p`;
+  return `Reset sau ${minutes} phút`;
+}
+function account(id) { return view.accounts.find(a => a.id === id); }
+function setBusy(value) {
+  busy = value;
+  for (const el of document.querySelectorAll('#refresh,#import,#demo,#reserve,#margin,.toggle,.account-refresh,[data-strategy]')) el.disabled = value || el.dataset.refreshing === 'true' || (!view && el.id !== 'refresh') || (view?.live && ['import','demo'].includes(el.id));
+}
+async function request(path, data) {
+  if (busy) return;
+  setBusy(true);
+  try {
+    const response = window.RELAY_LOCAL ? await window.RELAY_LOCAL.request(path, data) : await fetch(path, data === undefined ? {cache: 'no-store'} : {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'X-Relay-CSRF': view?.csrf || ''},
+      body: JSON.stringify(data)
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Không đọc được dữ liệu.');
+    view = payload;
+    $('error').hidden = true;
+    render();
+    if(location.hash==='#login' && !$('saved-accounts').children.length)routePage();
+  } catch (error) {
+    $('error').hidden = false;
+    $('error').textContent = `Dừng thao tác: ${error.message} Kiểm tra trạng thái trước khi thử lại.`;
+    $('snapshot-badge').textContent = 'KHÔNG XÁC NHẬN';
+    $('preview').disabled = true;
+  } finally { setBusy(false); }
+}
+function quotaCell(window, error) {
+  const cell = node('td');
+  if (!window) { cell.append(node('span', 'quota-unknown', error ? '— Không đọc được quota' : '— Chưa được báo cáo')); return cell; }
+  const remaining = 100 - window.used;
+  const line = node('div', 'quota-top');
+  line.append(node('strong', '', pct(remaining)), node('span', '', `đã dùng ${pct(window.used)}`));
+  const bar = node('div', 'bar');
+  const fill = node('div', `bar-fill${remaining <= 20 ? ' low' : remaining <= 40 ? ' warning' : ''}`);
+  fill.style.width = `${Math.max(0, Math.min(100, remaining))}%`;
+  bar.setAttribute('role', 'meter'); bar.setAttribute('aria-valuenow', String(remaining));
+  bar.setAttribute('aria-valuemin', '0'); bar.setAttribute('aria-valuemax', '100');
+  bar.setAttribute('aria-label', 'Quota còn lại'); bar.append(fill);
+  cell.append(line, bar, node('div', 'quota-reset', until(window.resets_at)));
+  return cell;
+}
+function render() {
+  const active = account(view.active) || {name:"Chưa chọn", token_summary:null}, target = account(view.target);
+  const manage=$('manage-accounts');
+  manage.setAttribute('aria-disabled',String(!view.account_management));
+  manage.title=view.account_management?'Quản lý tài khoản, alias và backup':'Cần dashboard live để quản lý tài khoản';
+  $('mode-title').textContent = view.live ? (view.loading ? 'Đang đọc quota Codex thật…' : view.stale ? 'Quota live đã cũ · cần cập nhật' : 'Đã kết nối Codex local · quota thật') : view.demo ? 'Bản xem trước · dữ liệu mô phỏng' : view.stale ? 'Snapshot đã cũ' : 'Snapshot quota · không phải kết nối trực tiếp';
+  $('mode-text').textContent = view.live ? (view.live_error || 'Kiểm tra riêng từng account theo quota, mức hoạt động và trạng thái. Account đang dùng được xác định từ file đăng nhập local.') : view.demo ? '4 tài khoản mẫu. Không có tài khoản thật được kết nối hoặc chuyển đổi.' : view.stale ? 'Quota quá 60 giây sẽ không được dùng để đề xuất chuyển.' : 'Chỉ dùng metadata bạn cung cấp. Tài khoản trong app chưa được xác nhận.';
+  $('count').textContent = view.accounts.length;
+  $('nav-count').textContent = view.accounts.length;
+  $('ready').textContent = view.accounts.filter(a => a.eligible && !a.active).length;
+  $('ready-total').textContent = ` / ${view.accounts.length}`;
+  $('active-name').textContent = active.name;
+  $('active-name').title = active.name;
+  $('active-note').textContent = view.live ? 'Theo đăng nhập trên máy · chưa xác nhận UI client' : view.demo ? 'Được đánh dấu trong dữ liệu demo' : 'Được đánh dấu trong snapshot';
+  $('source').textContent = view.live ? 'Codex app-server · đọc quota thật' : view.demo ? 'Mô phỏng · không tiêu thụ quota' : 'Không có live collector';
+  $('snapshot-badge').textContent = view.live ? (view.loading ? 'CONNECTING' : view.stale ? 'LIVE · STALE' : 'LIVE DATA') : view.demo ? 'DEMO DATA' : view.stale ? 'STALE SNAPSHOT' : 'METADATA SNAPSHOT';
+  const tokens = active.token_summary?.lifetimeTokens;
+  $('token-summary').textContent = Number.isFinite(tokens) ? `Hoạt động token tài khoản: ${fmt.format(tokens)} tokens` : 'Tokens / chi phí: chưa có dữ liệu';
+  const body = $('accounts-body'); body.replaceChildren();
+  for (const a of view.accounts) {
+    const row = node('tr', a.active ? 'current' : '');
+    const cell = node('td');
+    const block = node('div', 'account-cell');
+    const icon = node('div', 'account-icon', a.name.slice(0, 1).toUpperCase());
+    const label = node('div'), top = node('div', 'account-top');
+    top.append(node('strong', '', a.name));
+    if (a.active) top.append(node('span', 'mini-active'));
+    label.append(top, node('small', '', a.active ? (view.live ? `Đang dùng · ${a.plan || 'ChatGPT'}` : 'Đang dùng · theo snapshot') : (a.plan || a.id)));
+    block.append(icon, label); cell.append(block);
+    let state = 'Sẵn sàng', className = 'row-state';
+    if (a.excluded) { state = 'Đã tạm loại'; className += ' amber'; }
+    else if (view.stale || a.reason === 'Quota chưa được xác nhận' || a.reason.startsWith('Dữ liệu')) { state = 'Cần refresh'; className += ' amber'; }
+    else if (a.active) { state = a.can_keep ? 'Đang sử dụng' : 'Cần bàn giao'; className += a.can_keep ? ' active' : ' amber'; }
+    else if (!a.eligible) { state = 'Chưa đủ dư địa'; className += ' amber'; }
+    const status = node('td'); const badge = node('span', className, `● ${state}`); badge.title = a.reason; status.append(badge);
+    if(a.connection_error)status.append(node('small','',a.connection_error));
+    if (a.polling) {
+      const p=a.polling;
+      const stamp=value=>Number.isFinite(value)?new Date(value*1000).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'}):'—';
+      const cadence=p.interval_seconds<60?`${p.interval_seconds} giây`:`${Math.round(p.interval_seconds/60)} phút`;
+      const text=node('small','quota-countdown');
+      text.dataset.nextCheck=String(p.next_check_at);
+      text.dataset.refreshing=String(!!a.refreshing);
+      text.title=`${cadence}/lần · lần đọc gần nhất ${stamp(p.last_checked_at)}`;
+      text.style.display='block';status.append(text);
+      const refresh=node('button','button secondary account-refresh',a.refreshing?'Đang kiểm tra…':'↻ Refresh');
+      refresh.dataset.refreshing=String(!!a.refreshing);
+      refresh.disabled=!!a.refreshing;
+      refresh.setAttribute('aria-label',`Refresh quota ${a.name}`);
+      refresh.addEventListener('click',()=>request('/api/refresh',{identity:a.id}));
+      status.append(refresh);
+      const changed=node('small','',`Mốc quota không đổi: ${stamp(p.last_changed_at)}${p.reason==='inactive'?' · suy đoán không hoạt động':''}`);
+      changed.style.display='block';status.append(changed);
+    }
+
+    const toggleCell = node('td', 'toggle-cell'), toggle = node('input', 'toggle');
+    toggle.type = 'checkbox'; toggle.checked = !a.excluded; toggle.setAttribute('aria-label', `Cho ${a.name} tham gia rotate`);
+    toggle.addEventListener('change', () => {
+      const disabled = new Set(view.settings.disabled);
+      if (toggle.checked) disabled.delete(a.id); else disabled.add(a.id);
+      request('/api/settings', {...view.settings, disabled: [...disabled]});
+    });
+    toggleCell.append(toggle);
+    row.append(cell, quotaCell(a.short,a.connection_error), quotaCell(a.weekly,a.connection_error), status, toggleCell); body.append(row);
+  }
+  $('rotation-runner').hidden=!view.live;
+  $('reserve').value = view.settings.reserve;
+  $('reserve-value').textContent = view.settings.reserve;
+  $('margin').value = view.settings.margin;
+  $('margin-value').textContent = view.settings.margin;
+  for (const button of document.querySelectorAll('[data-strategy]')) {
+    const selected = button.dataset.strategy === view.settings.strategy;
+    button.classList.toggle('active', selected); button.setAttribute('aria-pressed', String(selected));
+  }
+  $('strategy-description').textContent = view.settings.strategy === 'balanced' ? 'Giữ account hiện tại khi còn đủ quota. Khi cần chuyển, chọn account có mức dư thấp nhất giữa các cửa sổ cao nhất.' : 'Ưu tiên quota tuần còn nhiều và gần reset, sau đó xét quota 5 giờ và dư địa của phiên. Account mới phải còn trên 30% ở cả hai cửa sổ, hoặc cao hơn theo cấu hình dự phòng.';
+  $('policy-summary').textContent = `Bàn giao khi dùng từ ${view.threshold}% ở bất kỳ cửa sổ nào. Account nhận phiên mới phải dùng dưới ${view.entry_threshold}% ở tất cả cửa sổ. Nếu cửa sổ đang cạn sắp reset trong 5 phút, ưu tiên chờ và đọc lại quota. Cài đặt chỉ lưu trong phiên dashboard này.`;
+  $('decision-title').textContent = view.action==='wait_reset'?`Chờ reset trên ${active.name}.`:view.action === 'keep' ? `Tiếp tục với ${active.name}.` : view.action === 'handoff' ? `Chuẩn bị chuyển sang ${target.name}.` : 'Tạm dừng và đọc lại quota.';
+  $('decision-copy').textContent = view.action==='wait_reset'?'Quota đang hạn chế sẽ reset trong vòng 5 phút. Chưa compact hoặc chuyển account; đọc lại quota sau reset để xác nhận trước khi tiếp tục.':view.action === 'keep' ? 'Chưa cần chuyển: quota vẫn đủ phần dự phòng. Giữ phiên hiện tại giúp giảm chi phí bàn giao và mất context.' : view.action === 'handoff' ? `${active.name} đã chạm ngưỡng hoặc bị loại. ${target.name} có ${pct(target.bottleneck_remaining)} dư địa ở cửa sổ hạn chế nhất.` : 'Chưa có account nhận phiên mới đủ điều kiện. Không đoán quota đã hồi chỉ dựa trên giờ reset.';
+  $('route-from').textContent = active.name;
+  $('route-to').textContent = target?.name || (view.action==='wait_reset'?'Chờ reset':view.action === 'keep' ? 'Giữ phiên' : 'Chờ dữ liệu');
+  const ranking = $('ranking'); ranking.replaceChildren();
+  view.ranking.forEach((id, index) => {
+    const a = account(id), row = node('div', 'rank');
+    row.append(node('span', 'rank-number', `0${index + 1}`), node('span', '', a.name),
+      node('span', 'rank-score', `${pct(a.bottleneck_remaining)} dư địa · ${a.score}/100 điểm${a.reset_bonus ? ` · lợi thế reset ${a.reset_bonus}` : ''}`));
+    ranking.append(row);
+  });
+  if (!view.ranking.length) ranking.append(node('p', 'method-note', 'Chưa có ứng viên đã xác nhận.'));
+  $('preview').disabled = false;
+  updateClock();
+}
+function updateClock() {
+  for(const el of document.querySelectorAll('.quota-countdown')) {
+    const seconds=Math.max(0,Math.ceil(Number(el.dataset.nextCheck)-Date.now()/1000));
+    el.textContent=el.dataset.refreshing==='true'?'Đang kiểm tra dữ liệu…':seconds===0?'Đến lượt kiểm tra…':`Kiểm tra sau ${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
+  }
+  $('clock').textContent = new Intl.DateTimeFormat('vi-VN', {hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tokyo'}).format(new Date()) + ' JST';
+  if (view) {
+    const age = Math.max(0, Math.floor(Date.now() / 1000 - view.received_at));
+    $('freshness').textContent = age < 60 ? `${age}s` : `${Math.floor(age / 60)}p`;
+    if (!view.live && !view.demo && age > 60 && !view.stale && !busy) request('/api/state');
+  }
+}
+function preview() {
+  if (!view) return;
+  const box = $('plan-content'); box.replaceChildren();
+  box.append(node('p', '', view.demo ? 'Đây là kế hoạch mô phỏng. Không đổi account, gửi prompt hoặc thực hiện tác vụ thật.' : 'Đây chỉ là kế hoạch. Adapter desktop và VS Code chưa được xác nhận; không đổi tài khoản thật.'));
+  const steps = view.action==='wait_reset'?['Giữ account hiện tại; chưa compact hay handoff.','Chờ cửa sổ quota đang hạn chế reset trong vòng 5 phút.','Đọc quota mới để xác nhận. Nếu quota chưa hồi, đánh giá lại điều kiện chuyển.']:view.action === 'keep' ? ['Giữ phiên hiện tại.', 'Theo dõi quota ở cả hai cửa sổ.', 'Tạo checkpoint ở ranh giới tác vụ khi tích hợp được kết nối.'] : view.action === 'pause' ? ['Dừng lập lịch tác vụ mới.', 'Đọc lại quota đã xác nhận hoặc đợi reset.', 'Không tự thử qua lại giữa các tài khoản.'] : [
+    `Ngừng nhận tác vụ mới trên desktop và VS Code của ${account(view.active).name}.`,
+    'Đợi công cụ đang chạy kết thúc; kiểm tra các tác động chưa rõ.',
+    'Tạo bản compact và lưu file handoff cho từng chat. Nếu thất bại, dừng chuyển.',
+    `Đọc lại quota của ${account(view.target).name}; chỉ chuyển nếu vẫn đủ dư địa.`,
+    'Đổi tài khoản và xác nhận danh tính trên cả desktop lẫn VS Code.',
+    'Nạp handoff; kiểm tra trạng thái file và hành động trước khi tiếp tục.'
+  ];
+  const list = node('ol'); steps.forEach(text => list.append(node('li', '', text))); box.append(list);
+  $('plan-dialog').showModal();
+}
+$('refresh').addEventListener('click', async () => {
+  if (view?.live) { await request('/api/refresh', {}); setTimeout(() => request('/api/state'), 2000); }
+  else request('/api/state');
+});
+$('demo').addEventListener('click', () => request('/api/demo', {}));
+$('import').addEventListener('click', () => $('import-file').click());
+$('import-file').addEventListener('change', async event => {
+  const file = event.target.files[0]; if (!file) return;
+  try {
+    if (file.size > 4 * 1024 * 1024) throw new Error('File tối đa 4 MB.');
+    await request('/api/import', JSON.parse(await file.text()));
+  } catch (error) { $('error').hidden = false; $('error').textContent = `Không nhập được snapshot: ${error.message}`; }
+  event.target.value = '';
+});
+for (const id of ['reserve','margin']) {
+  $(id).addEventListener('input', event => $(`${id}-value`).textContent = event.target.value);
+  $(id).addEventListener('change', event => request('/api/settings', {...view.settings, [id]: Number(event.target.value)}));
+}
+for (const button of document.querySelectorAll('[data-strategy]')) button.addEventListener('click', () => request('/api/settings', {...view.settings, strategy: button.dataset.strategy}));
+$('preview').addEventListener('click', preview);
+$('close-dialog').addEventListener('click', () => $('plan-dialog').close());
+$('done').addEventListener('click', () => $('plan-dialog').close());
+$('download').addEventListener('click', () => {
+  const {csrf, ...safe} = view;
+  const blob = new Blob([JSON.stringify({...safe, executed:false}, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob), link = node('a'); link.href = url; link.download = 'relay-rotation-plan.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+setInterval(updateClock, 1000);
+setInterval(()=>{if(!busy && view?.accounts.some(a=>a.refreshing))request('/api/state');},2000);
+setInterval(() => { if (!busy && !$('plan-dialog').open) request('/api/state'); }, 30000);
+request('/api/state');
+
+async function accountAPI(path, data) {
+  const result = await fetch(path, data === undefined ? {cache:'no-store'} : {
+    method:'POST', headers:{'Content-Type':'application/json','X-Relay-CSRF':view.csrf}, body:JSON.stringify(data)
+  });
+  const payload = await result.json();
+  if (!result.ok) throw new Error(payload.error || 'Không hoàn tất thao tác.');
+  return payload;
+}
+async function savedAccounts() {
+  const result = await accountAPI('/api/accounts');
+  const list = $('saved-accounts'); list.replaceChildren();
+  if (!result.profiles.length) list.append(node('p','account-help','Chưa có tài khoản. Thêm qua đăng nhập OpenAI hoặc lưu đăng nhập local hiện tại.'));
+  for (const profile of result.profiles) {
+    const row = node('div','saved-account'), details = node('div','saved-details');
+    details.append(node('strong','',profile.display_name || profile.name), node('small','',profile.email || profile.id.slice(0,12)));
+    if (profile.selected_on_disk) details.append(node('span','chip mint','Đang được chọn trên máy'));
+    const editor=node('div','alias-editor'), input=node('input');
+    input.value=profile.alias || ''; input.maxLength=80;
+    input.placeholder='Alias · để trống dùng email';
+    input.setAttribute('aria-label',`Alias cho ${profile.email || profile.name}`);
+    const save=node('button','button secondary','Lưu alias');
+    save.addEventListener('click',()=>accountOperation('/api/accounts/update',{identity:profile.id,alias:input.value}));
+    editor.append(input,save);
+    const actions=node('div','account-actions');
+    const button = node('button','button secondary',profile.selected_on_disk ? 'Đã chọn trên đĩa' : 'Sử dụng tài khoản');
+    button.disabled = profile.selected_on_disk || result.pending_recovery;
+    button.addEventListener('click', () => accountOperation('/api/accounts/switch',{identity:profile.id}));
+    const remove=node('button','button danger-outline','Gỡ profile');
+    remove.disabled=!!result.pending_recovery;
+    remove.addEventListener('click',()=>{
+      pendingDelete=profile;
+      $('delete-account-label').textContent=profile.display_name || profile.name;
+      $('delete-account-dialog').showModal();
+    });
+    save.disabled=!!result.pending_recovery;
+    actions.append(button,remove); row.append(details,editor,actions); list.append(row);
+  }
+  $('restore-account').disabled = !result.pending_recovery;
+}
+let accountBusy = false;
+async function accountOperation(path, data) {
+  if (accountBusy) return;
+  accountBusy = true;
+  const buttons = [...$('account-dialog').querySelectorAll('button')].map(button=>[button,button.disabled]);
+  for (const [button] of buttons) button.disabled = true;
+  try {
+    const result = await accountAPI(path,data);
+    $('account-message').textContent = result.removed ? 'Đã gỡ profile khỏi Relay; đăng nhập local không thay đổi.' : path.endsWith('/update') ? 'Đã lưu alias.' : result.restart_required ? 'Đã cập nhật file đăng nhập. Mở lại hai client và kiểm tra account hiển thị. Quota đang được đọc lại cho các profile thật.' : 'Đã lưu profile. Chưa đổi đăng nhập.';
+    await savedAccounts();
+    await request('/api/state');
+  } catch(error) { $('account-message').textContent = error.message; }
+  finally {
+    accountBusy = false;
+    for (const [button,disabled] of buttons) if (button.isConnected) button.disabled = disabled;
+  }
+}
+$('close-accounts').addEventListener('click',()=>{location.hash='overview';});
+$('refresh-accounts').addEventListener('click', () => savedAccounts().catch(error => $('account-message').textContent=error.message));
+$('capture-account').addEventListener('click', () => accountOperation('/api/accounts/capture',{name:$('profile-name').value}));
+$('restore-account').addEventListener('click', () => accountOperation('/api/accounts/restore',{}));
+
+let pendingDelete=null;
+$('cancel-delete-account').addEventListener('click',()=>{pendingDelete=null;$('delete-account-dialog').close();});
+$('confirm-delete-account').addEventListener('click',async()=>{
+  if(!pendingDelete) return;
+  const identity=pendingDelete.id;pendingDelete=null;$('delete-account-dialog').close();
+  await accountOperation('/api/accounts/remove',{identity});
+});
+let loginTimer=null;
+async function pollLogin() {
+  clearTimeout(loginTimer);
+  const status=await accountAPI('/api/accounts/login');
+  const active=['starting','waiting','cancelling'].includes(status.status);
+  $('login-status').hidden=!active;
+  $('login-account').disabled=active;
+  $('login-link').hidden=!status.auth_url;
+  if(status.auth_url) $('login-link').href=status.auth_url;
+  else $('login-link').removeAttribute('href');
+  $('login-status-text').textContent=status.status==='waiting' ? 'Mở trang OpenAI và chọn tài khoản cần thêm. Đăng nhập hiện tại không bị đổi.' : 'Đang chuẩn bị đăng nhập…';
+  if(active) loginTimer=setTimeout(()=>pollLogin().catch(error=>{$('account-message').textContent=error.message;}),1500);
+  else if(status.status==='complete') {
+    $('account-message').textContent='Đã thêm tài khoản. Quota sẽ được đọc tự động.';
+    await savedAccounts(); await request('/api/state');
+  } else if(status.status==='error' || status.status==='expired') $('account-message').textContent=status.message || 'Phiên đăng nhập hết hạn. Hãy thử lại.';
+}
+$('login-account').addEventListener('click',async()=>{
+  $('login-account').disabled=true;
+  try {
+    await accountAPI('/api/accounts/login/start',{alias:$('profile-name').value});
+    await pollLogin();
+  } catch(error) { $('account-message').textContent=error.message;$('login-account').disabled=false; }
+});
+$('cancel-login').addEventListener('click',async()=>{
+  try { await accountAPI('/api/accounts/login/cancel',{});await pollLogin(); }
+  catch(error) { $('account-message').textContent=error.message; }
+});
+
+function base64Bytes(bytes) {
+  let value=''; for (const byte of bytes) value+=String.fromCharCode(byte);
+  return btoa(value);
+}
+function decodeBackup(value) {
+  if (typeof value!=='string' || value.length>6000000) throw new Error('File backup không hợp lệ.');
+  return Uint8Array.from(atob(value),c=>c.charCodeAt(0));
+}
+async function backupKey(password,salt) {
+  const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:600000,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+$('export-accounts').addEventListener('click',async()=>{
+  if(accountBusy)return;
+  accountBusy=true;
+  try {
+    const password=$('backup-password').value;
+    if(password.length<12)throw new Error('Nhập mật khẩu backup ít nhất 12 ký tự.');
+    const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+    const key=await backupKey(password,salt);
+    const bundle=await accountAPI('/api/accounts/export',{});
+    if(!bundle.profiles.length)throw new Error('Chưa có tài khoản để export.');
+    const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(bundle)));
+    const file={format:'relay-encrypted-v1',salt:base64Bytes(salt),iv:base64Bytes(iv),data:base64Bytes(new Uint8Array(encrypted))};
+    const url=URL.createObjectURL(new Blob([JSON.stringify(file)],{type:'application/json'}));
+    const link=node('a');link.href=url;link.download='relay-accounts-encrypted.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    $('account-message').textContent='Đã export file mã hóa. Phiên đăng nhập hết hạn có thể cần đăng nhập lại sau khi import.';
+  }catch(error){$('account-message').textContent=error.message;}
+  finally{$('backup-password').value='';accountBusy=false;}
+});
+$('import-accounts').addEventListener('click',()=>{if(!accountBusy)$('backup-file').click();});
+$('backup-file').addEventListener('change',async()=>{
+  if(accountBusy)return;
+  const file=$('backup-file').files[0];if(!file)return;
+  accountBusy=true;
+  try{
+    if(file.size>6000000)throw new Error('File quá lớn (tối đa 6 MB).');
+    const password=$('backup-password').value;
+    if(password.length<12)throw new Error('Nhập mật khẩu của file backup trước khi import.');
+    const backup=JSON.parse(await file.text());
+    if(backup.format!=='relay-encrypted-v1')throw new Error('Chỉ nhận file export mã hóa của Relay.');
+    const salt=decodeBackup(backup.salt),iv=decodeBackup(backup.iv);
+    if(salt.length!==16||iv.length!==12)throw new Error('File backup không hợp lệ.');
+    const key=await backupKey(password,salt);
+    let plain;
+    try{plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,decodeBackup(backup.data));}
+    catch{throw new Error('Sai mật khẩu hoặc file đã hỏng.');}
+    const result=await accountAPI('/api/accounts/import',{bundle:JSON.parse(new TextDecoder().decode(plain))});
+    $('account-message').textContent=`Đã nhập ${result.imported} tài khoản; giữ nguyên ${result.skipped} tài khoản trùng. Đăng nhập local không thay đổi.`;
+    await savedAccounts();await request('/api/state');
+  }catch(error){$('account-message').textContent=error.message;}
+  finally{accountBusy=false;$('backup-password').value='';$('backup-file').value='';}
+});
+
+let rotationState=null, rotationBusy=false;
+const rotationLabels={idle:'Sẵn sàng',waiting_reset:'Chờ quota reset',queued:'Đã xếp lịch',waiting_clients_closed:'Chờ đóng client',preflight:'Xác minh',compacting:'Đang compact',exporting:'Đang tạo handoff',exported:'Đã export',switching:'Đang đổi account',importing:'Đang import',imported:'Đã import',continuing:'Đang tiếp tục',complete:'Hoàn tất',checkpoint_complete:'Đã lưu checkpoint',failed:'Đã dừng do lỗi',cancelled:'Đã hủy',recovery_required:'Cần phục hồi'};
+function renderRotation(state){
+  rotationState=state;
+  const job=state.job||{},config=state.config||{};
+  $('rotation-phase').textContent=rotationLabels[job.phase]||job.phase;
+  const stopped=['failed','recovery_required','cancelled'].includes(job.phase);
+  $('rotation-message').textContent=(stopped?'Trạng thái lịch sử (không phải kiểm tra hiện tại): ':'')+(job.message||'Chưa có phiên rotate.');
+  let clientStatus=$('rotation-client-status');
+  if(!clientStatus){clientStatus=node('p','account-help');clientStatus.id='rotation-client-status';$('rotation-message').after(clientStatus);}
+  clientStatus.hidden=!state.client_check;
+  clientStatus.textContent=state.client_check?`Kiểm tra hiện tại: ${state.client_check.message}`:'';
+  $('rotation-recovery').disabled=rotationBusy||state.busy||state.client_check?.clear===false;
+  $('rotation-config-summary').textContent=`${config.workflow_ids?.length||config.threads?.length||0} luồng · Tự động: ${config.enabled?'bật':'tắt'} · Tiếp tục bằng Relay: ${config.continue_work?'bật':'tắt'}`+(state.file_auth_ready?'':` · Cần thiết lập cli_auth_credentials_store = \"file\" ở đầu ${state.codex_home}/config.toml và đăng nhập lại trước khi chạy.`);
+  for(const id of ['rotation-start','rotation-checkpoint','rotation-settings'])$(id).disabled=state.busy||rotationBusy;
+  const missing=(state.managed_threads||[]).filter(flow=>(config.workflow_ids||[]).includes(flow.id)&&!flow.bindings[state.active_account]);
+  let mappingStatus=$('rotation-mapping-status');
+  if(!mappingStatus){mappingStatus=node('p','account-help');mappingStatus.id='rotation-mapping-status';$('rotation-config-summary').after(mappingStatus);}
+  mappingStatus.hidden=!missing.length;
+  mappingStatus.textContent=missing.length?`Chưa thể rotate: ${missing.map(flow=>flow.label).join(', ')} chưa có thread trên account hiện tại. ${['failed','recovery_required'].includes(job.phase)?'Đóng client và chọn “Xác nhận sau phục hồi”, sau đó ':''}mở luồng bên dưới và chọn “Nạp handoff còn thiếu”.`:'';
+  if(missing.length)for(const id of ['rotation-start','rotation-checkpoint'])$(id).disabled=true;
+  $('rotation-recovery').hidden=!['failed','cancelled','recovery_required'].includes(job.phase);
+  const artifacts=$('rotation-artifacts');artifacts.replaceChildren();
+  if(job.failed_phase)artifacts.append(node('p','account-help',`Dừng tại bước: ${rotationLabels[job.failed_phase]||job.failed_phase}. ${job.rolled_back?'Đã xác minh hoàn nguyên account.':'Kiểm tra account trước khi tiếp tục.'}`));
+  if(job.directory)artifacts.append(node('p','account-help',`Thư mục handoff / journal: ${job.directory}`));
+  for(const h of job.handoffs||[]){
+    const link=node('a','button secondary handoff-artifact',`↓ ${h.file}`);
+    link.href='/api/rotation/handoff?name='+encodeURIComponent(h.file);link.download=h.file;artifacts.append(link);
+  }
+  const logBox=$('relay-log-output');
+  const logText=(state.logs||[]).map(row=>`${new Date(row.time*1000).toLocaleString('vi-VN')} [${row.level.toUpperCase()}] [${row.job_id?.slice(0,8)||'server'}] ${rotationLabels[row.phase]||row.phase}${row.context?` · Account: ${row.context.account_name||row.context.account_id||'—'} · Thread: ${row.context.alias||'—'} (${row.context.thread_id||'đang tạo'})`:(row.source_account?.id||row.target_account?.id)?` · ${row.source_account?.name||'—'} → ${row.target_account?.name||'—'}`:''}: ${row.message}`).join('\n');
+  if(logBox.textContent!==logText){logBox.textContent=logText||'Chưa có log.';if($('relay-log-follow').checked)logBox.scrollTop=logBox.scrollHeight;}
+  $('relay-log-status').textContent=state.busy?`Đang chạy: ${rotationLabels[job.phase]||job.phase}`:`Hiện tại: ${rotationLabels[job.phase]||job.phase} · ${(state.logs||[]).length} mốc đã lưu`;
+  renderManagedWorkflows(state);
+  for(const imported of job.imports||[]){
+    const line=node('p','handoff-artifact',`${imported.imported?'Đã import':'Chưa xác nhận import'} · ${imported.label||'Luồng công việc'} · ${imported.reused?'Dùng lại thread':'Tạo thread'}: `);
+    line.append(node('code','',imported.id));line.append(node('small','',` · ${imported.cwd}`));artifacts.append(line);
+  }
+}
+async function pollRotation(){
+  if(!view?.live||rotationBusy)return;
+  try{renderRotation(await accountAPI('/api/rotation'));}
+  catch(error){$('rotation-message').textContent=error.message;}
+}
+async function rotationAction(path,data={}){
+  if(rotationBusy)return;
+  rotationBusy=true;
+  let failure=null;
+  try{renderRotation(await accountAPI(path,data));}
+  catch(error){failure=error.message;}
+  finally{rotationBusy=false;if(rotationState)renderRotation(rotationState);if(failure)$('rotation-message').textContent=failure;}
+}
+$('rotation-settings').addEventListener('click',async()=>{
+  if(!view?.live)return;
+  try{
+    const [state,result]=await Promise.all([accountAPI('/api/rotation'),accountAPI('/api/rotation/sessions')]);
+    renderRotation(state);
+    const selectedFlows=new Set(state.config.workflow_ids||[]),selected=new Set(state.config.threads);
+    const known=new Set(),workflows=$('rotation-workflows');workflows.replaceChildren();
+    for(const flow of state.managed_threads||[]){
+      for(const binding of Object.values(flow.bindings))known.add(binding.thread_id);
+      const binding=flow.bindings[state.active_account];
+      const label=node('label','rotation-session'),checkbox=node('input');checkbox.type='checkbox';checkbox.value=flow.id;
+      checkbox.checked=selectedFlows.has(flow.id);checkbox.disabled=!binding;
+      const text=node('span','',flow.label);text.append(node('small','',binding?`Account hiện tại · ${binding.thread_id}`:'Chưa liên kết thread trên account hiện tại'));
+      label.append(checkbox,text);workflows.append(label);
+    }
+    if(!(state.managed_threads||[]).length)workflows.append(node('p','','Chưa có luồng được quản lý. Chọn chat bên dưới để đăng ký.'));
+    const list=$('rotation-sessions');list.replaceChildren();let available=0;
+    for(const session of result.sessions){
+      if(known.has(session.id))continue;
+      available++;
+      const label=node('label','rotation-session'),checkbox=node('input');checkbox.type='checkbox';checkbox.value=session.id;checkbox.checked=selected.has(session.id);
+      const text=node('span','',session.title);text.append(node('small','',`${session.frontend} · ${session.cwd} · ${session.id}`));label.append(checkbox,text);list.append(label);
+    }
+    if(!available)list.append(node('p','','Không có chat local chưa đăng ký.'));
+    $('rotation-auto').checked=state.config.enabled;$('rotation-continue').checked=state.config.continue_work;
+    $('rotation-dialog-error').textContent='';$('rotation-dialog').showModal();
+  }catch(error){$('rotation-message').textContent=error.message;}
+});
+$('rotation-close').addEventListener('click',()=>$('rotation-dialog').close());
+$('rotation-save').addEventListener('click',async()=>{
+  const threads=[...$('rotation-sessions').querySelectorAll('input:checked')].map(el=>el.value);
+  const workflow_ids=[...$('rotation-workflows').querySelectorAll('input:checked')].map(el=>el.value);
+  try{
+    renderRotation(await accountAPI('/api/rotation/settings',{threads,workflow_ids,enabled:$('rotation-auto').checked,continue_work:$('rotation-continue').checked}));
+    $('rotation-dialog').close();
+  }catch(error){$('rotation-dialog-error').textContent=error.message;}
+});
+let confirmedRotationMode=null;
+async function confirmRotation(mode){
+  try{
+    const state=await accountAPI('/api/rotation');renderRotation(state);
+    if(state.busy)throw new Error('Đang có phiên chạy.');
+    const flows=(state.managed_threads||[]).filter(flow=>(state.config.workflow_ids||[]).includes(flow.id));
+    if(!flows.length)throw new Error('Chọn chat và lưu cấu hình trước khi chạy.');
+    if(flows.some(flow=>!flow.bindings[state.active_account]))throw new Error('Có workflow chưa có thread nguồn. Nạp handoff còn thiếu trong Luồng công việc được quản lý trước khi chạy.');
+    confirmedRotationMode=mode;
+    $('rotation-restart-desktop').checked=false;
+    $('rotation-confirm-title').textContent=mode==='rotate'?'Xác nhận rotate tài khoản':'Xác nhận compact & export';
+    const box=$('rotation-confirm-content');box.replaceChildren();
+    const name=state.accounts?.find(account=>account.id===state.active_account)?.name||state.active_account||'Chưa xác định';
+    box.append(node('p','',`Account nguồn: ${name}`));
+    const list=node('ul');
+    for(const flow of flows)list.append(node('li','',`${flow.label} · ${flow.bindings[state.active_account]?.thread_id||'Chưa có thread nguồn'} · ${flow.cwd}`));
+    box.append(list);
+    const steps=node('ol');
+    const descriptions=['Chờ client đóng; xác minh account và quota.','Sao lưu dữ liệu, compact từng thread và xuất handoff Markdown.'];
+    if(mode==='rotate')descriptions.push('Chọn account đích đủ quota theo chính sách hiện tại; xác minh lại trước khi đổi.','Đổi đăng nhập, xác minh account đích; dùng lại thread liên kết hoặc tạo mới, đồng bộ alias và import toàn bộ context.',state.config.continue_work?'Sau import, Relay chạy tiếp một lượt: có thể sửa file trong project, tắt mạng.':'Sau import, mở client để tiếp tục thủ công.');
+    else descriptions.push('Kết thúc tại checkpoint; giữ nguyên account, không import hoặc chạy tiếp.');
+    for(const text of descriptions)steps.append(node('li','',text));box.append(steps);
+    $('rotation-confirm-dialog').showModal();
+  }catch(error){$('rotation-message').textContent=error.message;}
+}
+$('rotation-start').addEventListener('click',()=>confirmRotation('rotate'));
+$('rotation-checkpoint').addEventListener('click',()=>confirmRotation('checkpoint'));
+$('rotation-confirm-cancel').addEventListener('click',()=>{confirmedRotationMode=null;$('rotation-confirm-dialog').close();});
+$('rotation-confirm-run').addEventListener('click',()=>{
+  const mode=confirmedRotationMode;confirmedRotationMode=null;$('rotation-confirm-dialog').close();
+  if(mode)rotationAction('/api/rotation/start',{mode,restart_desktop:$('rotation-restart-desktop').checked});
+});
+$('force-switch').addEventListener('click',async()=>{
+  try{
+    const state=await accountAPI('/api/rotation');renderRotation(state);
+    const select=$('force-switch-target');select.replaceChildren();
+    for(const account of state.accounts||[]){if(account.id===state.active_account)continue;const option=node('option','',account.name);option.value=account.id;select.append(option);}
+    if(!select.options.length)throw new Error('Chưa có account khác.');
+    if(state.busy)throw new Error('Đợi phiên hiện tại kết thúc.');
+    $('force-switch-error').textContent='';$('force-switch-dialog').showModal();
+  }catch(error){$('rotation-message').textContent=error.message;}
+});
+$('force-switch-cancel').addEventListener('click',()=>$('force-switch-dialog').close());
+$('force-switch-confirm').addEventListener('click',async()=>{
+  const button=$('force-switch-confirm');button.disabled=true;
+  try{
+    await accountAPI('/api/accounts/switch',{identity:$('force-switch-target').value});
+    $('force-switch-dialog').close();await request('/api/state');await pollRotation();
+  }catch(error){$('force-switch-error').textContent=error.message;}
+  finally{button.disabled=false;}
+});
+$('rotation-cancel').addEventListener('click',()=>rotationAction('/api/rotation/cancel'));
+$('rotation-recovery').addEventListener('click',()=>rotationAction('/api/rotation/recovery'));
+setInterval(pollRotation,3000);
+pollRotation();
+
+function renderManagedWorkflows(state){
+  const box=$('managed-workflows');
+  if(box.contains(document.activeElement)&&['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))return;
+  const opened=new Set([...box.querySelectorAll('details[open]')].map(el=>el.dataset.workflow));
+  box.replaceChildren();
+  box.append(node('h3','','Luồng công việc được quản lý'));
+  if(!(state.managed_threads||[]).length){box.append(node('p','account-help','Chọn chat và lưu cấu hình để tạo luồng có nhãn, theo dõi account–thread và lịch sử rotate.'));return;}
+  const accountName=id=>state.accounts?.find(a=>a.id===id)?.name||id||'Chưa chọn';
+  for(const flow of state.managed_threads){
+    const details=node('details','managed-workflow');details.dataset.workflow=flow.id;details.open=opened.has(flow.id)||((state.config.workflow_ids||[]).includes(flow.id)&&!flow.bindings[state.active_account]);
+    details.append(node('summary','',`${flow.label} · ${Object.keys(flow.bindings).length} account · ${flow.history.length} lần bàn giao gần nhất`));
+    details.append(node('p','account-help',`Workflow ID: ${flow.id} · ${flow.cwd}`));
+    for(const [account,binding] of Object.entries(flow.bindings)){
+      const line=node('p','binding-row',`${accountName(account)}${account===state.active_account?' · đang chọn':''} · ${binding.state==='ready'?'Sẵn sàng':'Chờ xác nhận import'}`);
+      const expectedName=`${flow.label} · ${accountName(account)}`;
+      line.append(node('small','',`Tên Codex: ${expectedName} · ${binding.name_status==='synced'&&binding.synced_name===expectedName?'Đã đồng bộ':binding.name_status==='error'?'Lỗi đồng bộ tên':'Chờ đồng bộ khi client đóng'}`));line.append(node('small','',`Account ID: ${account}`));line.append(node('code','',binding.thread_id));details.append(line);
+    }
+    if(!flow.bindings[state.active_account]){
+      const repair=node('button','button secondary','Nạp handoff còn thiếu');repair.disabled=state.busy||rotationBusy||['failed','recovery_required'].includes(state.job?.phase);
+      repair.addEventListener('click',()=>{
+        if(confirm(`Nạp handoff mới nhất đã lưu của “${flow.label}” vào ${accountName(state.active_account)}? Tạo thread và đồng bộ alias; không compact, đổi account hoặc chạy tiếp công việc.`))rotationAction('/api/rotation/start',{mode:'repair',workflow_id:flow.id});
+      });details.append(repair);
+    }
+    const editor=node('div','runner-actions'),label=node('input');label.value=flow.label;label.maxLength=80;label.setAttribute('aria-label',`Alias chung ${flow.label}`);
+    const rename=node('button','button secondary','Lưu alias chung');rename.disabled=state.busy;
+    rename.addEventListener('click',()=>rotationAction('/api/rotation/workflow',{workflow_id:flow.id,label:label.value}));editor.append(label,rename);details.append(editor);
+    const binder=node('div','runner-actions'),account=node('select');account.setAttribute('aria-label',`Account liên kết ${flow.label}`);
+    for(const item of state.accounts||[]){const option=node('option','',item.name+(flow.bindings[item.id]?' · đã liên kết':''));option.value=item.id;account.append(option);}
+    const thread=node('input');thread.placeholder='Thread ID local đã có';thread.setAttribute('aria-label',`Thread liên kết ${flow.label}`);
+    const bind=node('button','button secondary','Liên kết thread có sẵn');bind.disabled=state.busy;
+    bind.addEventListener('click',()=>rotationAction('/api/rotation/workflow',{workflow_id:flow.id,account_id:account.value,thread_id:thread.value.trim()}));binder.append(account,thread,bind);details.append(binder);
+    if(flow.history.length){
+      const history=node('ul','managed-history');
+      for(const event of [...flow.history].reverse().slice(0,10)){
+        const date=new Date(event.updated_at*1000).toLocaleString('vi-VN',{timeZone:'Asia/Tokyo'});
+        const item=node('li','',`${date} · ${accountName(event.from_account)} → ${accountName(event.to_account)} · ${event.to_thread?(event.reused?'dùng lại thread':'tạo thread'):'chưa nạp context'} · ${event.status}`);
+        history.append(item);
+      }details.append(history);
+    }
+    const sync=node('button','button secondary','Đồng bộ tên Codex');sync.disabled=state.busy;sync.addEventListener('click',()=>rotationAction('/api/rotation/names'));details.append(sync);
+    box.append(details);
+  }
+}
+
+function routePage(){
+  const login=location.hash==='#login';
+  $('dashboard-page').hidden=login;
+  $('account-dialog').hidden=!login;
+  const active=login?'#login':location.hash||'#overview';
+  for(const link of document.querySelectorAll('.sidebar nav a')){
+    const selected=link.getAttribute('href')===active;
+    link.classList.toggle('selected',selected);
+    if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
+  }
+  document.querySelector('.breadcrumb').textContent=login?'Workspace / Quản lý đăng nhập':'Workspace / Tổng quan';
+  if(login){
+    if(!view?.account_management){$('account-message').textContent='Quản lý đăng nhập cần dashboard live.';return;}
+    if($('account-message').textContent==='Quản lý đăng nhập cần dashboard live.')$('account-message').textContent='';
+    savedAccounts().then(pollLogin).catch(error=>$('account-message').textContent=error.message);
+  }
+}
+window.addEventListener('hashchange',routePage);
+$('manage-accounts').addEventListener('click',()=>{if(location.hash==='#login')routePage();});
+routePage();
+const themeMedia=window.matchMedia('(prefers-color-scheme: dark)');
+let themeChoice='system';
+try{themeChoice=localStorage.getItem('relay-theme')||'system';}catch{}
+if(!['system','light','dark'].includes(themeChoice))themeChoice='system';
+function applyTheme(){
+  document.documentElement.dataset.theme=themeChoice==='system'?(themeMedia.matches?'dark':'light'):themeChoice;
+  $('theme-select').value=themeChoice;
+}
+$('theme-select').addEventListener('change',()=>{
+  themeChoice=$('theme-select').value;
+  try{localStorage.setItem('relay-theme',themeChoice);}catch{}
+  applyTheme();
+});
+themeMedia.addEventListener('change',()=>{if(themeChoice==='system')applyTheme();});
+applyTheme();
+</script></body></html>
