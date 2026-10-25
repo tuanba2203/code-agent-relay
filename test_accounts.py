@@ -145,6 +145,24 @@ class AccountTests(unittest.TestCase):
         with patch('subprocess.run',side_effect=OSError()):
             with self.assertRaises(AccountError): accounts.clients_stopped()
 
+    def test_process_guard_ignores_only_exact_vscode_crash_reporter(self):
+        reporter='/Applications/Visual Studio Code.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler'
+        with patch('subprocess.run',return_value=type('Result',(),{'stdout':'  '+reporter+'\n/usr/bin/python3\n'})()):
+            accounts.clients_stopped()
+        for blocker in (
+            '/Applications/Visual Studio Code.app/Contents/MacOS/Electron',
+            '/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/Contents/MacOS/Code Helper',
+            '/Applications/Codex.app/Contents/MacOS/Codex',
+            reporter.replace('Visual Studio Code.app','Codex.app'),
+            reporter.replace('chrome_crashpad_handler','another_helper'),
+        ):
+            with self.subTest(blocker=blocker):
+                with patch('subprocess.run',return_value=type('Result',(),{'stdout':reporter+'\n'+blocker+'\n'})()):
+                    with self.assertRaises(AccountError) as caught:
+                        accounts.clients_stopped()
+                self.assertIn(blocker,str(caught.exception))
+                self.assertNotIn(reporter,str(caught.exception))
+
     def test_process_guard_names_the_actual_blocker(self):
         command='/Applications/ChatGPT.app/Contents/MacOS/ChatGPT'
         with patch('subprocess.run',return_value=type('Result',(),{'stdout':command+'\n/usr/bin/python3\n'})()):

@@ -132,6 +132,10 @@ def clients_stopped():
         raise AccountError('Cannot verify client processes; switch blocked') from None
     blockers=[]
     for command in output.splitlines():
+        command = command.strip()
+        # This crash reporter can outlive VS Code and does not use Codex auth.
+        if command == '/Applications/Visual Studio Code.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler':
+            continue
         name = Path(command.strip()).name.lower()
         if (name in ('codex', 'codext', 'chatgpt', 'code', 'code-insiders')
                 or 'code helper' in name or 'codex helper' in name or 'chatgpt helper' in name
