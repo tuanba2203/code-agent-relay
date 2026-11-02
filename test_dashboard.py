@@ -135,6 +135,11 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.http('/api/rotation/automatic','POST',{'enabled':True})[0],409)
         self.store.rotation.set_automatic.assert_not_called()
 
+    def test_reset_redemption_requires_csrf_and_live_accounts(self):
+        data={'identity':'sample-account','operation':'sample-operation','expires_at':2000000000}
+        self.assertEqual(self.http('/api/quota/reset','POST',data,authorized=False)[0],403)
+        self.assertEqual(self.http('/api/quota/reset','POST',data)[0],409)
+
     def test_settings_require_csrf(self):
         self.assertEqual(self.http('/api/settings', 'POST', {}, authorized=False)[0], 403)
 

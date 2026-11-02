@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import uuid
 from accounts import AccountError, atomic, identify, read_private
 from quota_schedule import fingerprint, interval
 
@@ -103,6 +104,46 @@ class RPC:
         self.process.stdin.close(); self.process.stdout.close()
 
 
+def reset_credits_snapshot(value):
+    """Allowlisted display metadata only; never expose redemption identifiers."""
+    if not isinstance(value, dict):
+        return None
+    count = value.get('availableCount')
+    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+        return None
+    rows = value.get('credits')
+    details = None
+    if isinstance(rows, list):
+        details = []
+        for row in rows:
+            if not isinstance(row, dict) or row.get('status') != 'available':
+                continue
+            expires = row.get('expiresAt')
+            if isinstance(expires, bool) or not isinstance(expires, (int, float)) or not 0 < expires < 253402300800:
+                expires = None
+            title = row.get('title')
+            details.append({'title': title[:160] if isinstance(title, str) and title.strip() else 'Lượt reset',
+                            'expires_at': expires})
+        details.sort(key=lambda row: row['expires_at'] or float('inf'))
+    return {'available_count': count, 'credits': details}
+
+
+def earliest_reset(response, now):
+    value = response.get('rateLimitResetCredits') or {}
+    count, rows = value.get('availableCount'), value.get('credits')
+    if not isinstance(count, int) or isinstance(count, bool) or count <= 0 or not isinstance(rows, list):
+        raise QuotaError('Không có lượt reset được xác nhận.')
+    available = [r for r in rows if isinstance(r, dict) and r.get('status') == 'available']
+    if len(available) != count:
+        raise QuotaError('Thiếu chi tiết lượt reset; không thể xác định hạn gần nhất.')
+    for row in available:
+        expiry = row.get('expiresAt')
+        if (not isinstance(expiry, (int, float)) or isinstance(expiry, bool)
+                or not now < expiry < 253402300800 or not isinstance(row.get('id'), str) or not row['id']):
+            raise QuotaError('Hạn dùng chưa rõ hoặc đã hết hạn; hãy Refresh trước.')
+    return min(available, key=lambda r: (r['expiresAt'], r['id']))
+
+
 def quota_snapshot(response):
     buckets = response.get('rateLimitsByLimitId')
     snapshot = buckets.get('codex') if buckets else response.get('rateLimits')
@@ -116,6 +157,7 @@ def quota_snapshot(response):
                           'resets_at':window.get('resetsAt')} if isinstance(window,dict) else None)
     blocked = (response.get('ordinaryUsageAllowed') is False or snapshot.get('rateLimitReachedType')
                or snapshot.get('spendControlReached') is True)
+    result['reset_credits'] = reset_credits_snapshot(response.get('rateLimitResetCredits'))
     result['source'] = 'api'
     result['refresh'] = {'requested':True,'method':'api','status':'error' if blocked else 'ok'}
     return result
@@ -212,7 +254,23 @@ class Collector:
         # Proxy owns its saved credential chain, not a running client's auth cache.
         return self._read_profile(profile,prefer_live=False)
 
-    def _read_profile(self, profile,prefer_live=True):
+    def consume_reset(self, identity, operation, expected_expiry):
+        try:
+            if str(uuid.UUID(operation)) != operation: raise ValueError()
+        except (ValueError, TypeError, AttributeError):
+            raise QuotaError('Invalid reset operation identifier') from None
+        profile = next((p for p in self.manager.list()['profiles'] if p['id'] == identity), None)
+        if profile is None: raise QuotaError('Account không còn tồn tại.')
+        path = self.manager.directory/'reset-operations.json'
+        records = json.loads(read_private(path)) if path.exists() else {}
+        if operation in records:
+            raise QuotaError('Yêu cầu này đã được gửi; kiểm tra quota và lịch sử trước khi thao tác tiếp.')
+        if any(r.get('account') == identity and r.get('status') == 'uncertain' for r in records.values()):
+            raise QuotaError('Lần reset trước chưa rõ kết quả. Kiểm tra trên Codex trước khi dùng thêm lượt.')
+        return self._read_profile(profile, prefer_live=False,
+                                  reset=(operation, expected_expiry, path, records))
+
+    def _read_profile(self, profile,prefer_live=True,reset=None):
         with self.manager.lock():
             if self.manager.journal.exists():
                 raise QuotaError('Account switch recovery is pending')
@@ -240,9 +298,28 @@ class Collector:
                 if profile.get('email') and account.get('email') != profile['email']:
                     raise QuotaError('Authenticated account identity mismatch')
                 limits = rpc.call('account/rateLimits/read')
+                if reset is not None:
+                    operation, expected_expiry, journal_path, records = reset
+                    credit = earliest_reset(limits, time.time())
+                    if credit['expiresAt'] != expected_expiry:
+                        raise QuotaError('Lượt sắp hết hạn đã thay đổi. Refresh rồi xác nhận lại.')
+                    records[operation] = {'account': profile['id'], 'status': 'uncertain', 'started_at': time.time()}
+                    atomic(journal_path, records)  # Durable intent before any redemption; never replay.
+                    try:
+                        reply = rpc.call('account/rateLimitResetCredit/consume',
+                                         {'idempotencyKey': operation, 'creditId': credit['id']})
+                        outcome = reply.get('outcome')
+                        if outcome not in ('reset', 'alreadyRedeemed', 'nothingToReset', 'noCredit'):
+                            raise QuotaError('Kết quả reset chưa rõ. Kiểm tra trên Codex; không tự gửi lại.')
+                        records[operation].update(status=outcome)
+                        atomic(journal_path, records)
+                    except Exception:
+                        raise QuotaError('Reset bị gián đoạn, chưa rõ kết quả. Kiểm tra trên Codex trước khi tiếp tục.') from None
+                    limits = rpc.call('account/rateLimits/read')
                 measured=quota_snapshot(limits)
                 measured['observed_at']=time.time()
                 result = {'usage':measured,'plan':account.get('planType')}
+                if reset is not None: result['reset_outcome'] = outcome
                 try:
                     activity=rpc.call('account/usage/read',timeout=10)
                     summary=activity.get('summary') or {}

@@ -19,6 +19,38 @@ function setBusy(value) {
   busy = value;
   for (const el of document.querySelectorAll('#refresh,#import,#demo,#reserve,#margin,.toggle,.account-refresh,[data-strategy]')) el.disabled = value || el.dataset.refreshing === 'true' || (!view && el.id !== 'refresh') || (view?.live && ['import','demo'].includes(el.id));
 }
+let resetDialogResolve = null;
+let resetPending = false;
+function showResetDialog(title, message, confirmation = false) {
+  const dialog = $('reset-dialog');
+  if (dialog.open) return Promise.resolve(false);
+  const previousFocus = document.activeElement;
+  $('reset-dialog-title').textContent = title;
+  $('reset-dialog-message').textContent = message;
+  dialog.returnValue = '';
+  $('reset-dialog-confirm').hidden = !confirmation;
+  $('reset-dialog-cancel').disabled = false;
+  $('reset-dialog-cancel').textContent = confirmation ? 'Hủy' : 'Đóng';
+  dialog.showModal();
+  $('reset-dialog-cancel').focus();
+  return new Promise(resolve => {
+    resetDialogResolve = value => {
+      resetDialogResolve = null;
+      resolve(value);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  });
+}
+$('reset-dialog-cancel').addEventListener('click', () => $('reset-dialog').close('cancel'));
+$('reset-dialog-confirm').addEventListener('click', () => $('reset-dialog').close('confirm'));
+$('reset-dialog').addEventListener('close', () => {
+  if (resetDialogResolve) resetDialogResolve($('reset-dialog').returnValue === 'confirm');
+});
+$('reset-dialog').addEventListener('cancel', event => {
+  event.preventDefault();
+  if (!resetPending) $('reset-dialog').close('cancel');
+});
+
 async function request(path, data) {
   if (busy) return;
   setBusy(true);
@@ -27,19 +59,73 @@ async function request(path, data) {
       method: 'POST', headers: {'Content-Type': 'application/json', 'X-Relay-CSRF': view?.csrf || ''},
       body: JSON.stringify(data)
     });
+    if(path === '/api/quota/reset' && response.status === 404) throw new Error('Backend đang chạy chưa có API reset. Khởi động lại server Python rồi refresh trang.');
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Không đọc được dữ liệu.');
     view = payload;
     $('error').hidden = true;
     render();
+    if(path === '/api/quota/reset') { resetPending=false; $('reset-dialog').close('done'); }
+    if(payload.reset_outcome)showResetDialog('Kết quả dùng lượt reset', ({reset:'Đã dùng lượt reset và đọc lại quota.',alreadyRedeemed:'Yêu cầu reset đã hoàn tất trước đó; quota đã được đọc lại.',nothingToReset:'Không có giới hạn đủ điều kiện reset; provider không thực hiện reset.',noCredit:'Provider báo không còn lượt reset khả dụng.'})[payload.reset_outcome]);
     if(location.hash==='#login' && !$('saved-accounts').children.length)routePage();
   } catch (error) {
+    if(path === '/api/quota/reset') {
+      resetPending=false; $('reset-dialog').close('error');
+      showResetDialog('Không xác nhận được reset', `${error.message}\nKhông nhấn dùng lại ngay. Kiểm tra quota và lịch sử reset trên Codex trước.`);
+    }
     $('error').hidden = false;
     $('error').textContent = `Dừng thao tác: ${error.message} Kiểm tra trạng thái trước khi thử lại.`;
     $('snapshot-badge').textContent = 'KHÔNG XÁC NHẬN';
     $('preview').disabled = true;
   } finally { setBusy(false); }
 }
+function resetCreditsCell(value, identity) {
+  const cell = node('td', 'reset-credits-cell');
+  if (!value || !Number.isInteger(value.available_count) || value.available_count < 0) {
+    cell.append(node('span', 'quota-unknown', '— Chưa có dữ liệu'));
+    return cell;
+  }
+  cell.append(node('strong', '', `${value.available_count} lượt`));
+  if (value.available_count === 0) return cell;
+  const details = node('details'), summary = node('summary', '', 'Hạn dùng lượt reset');
+  details.append(summary);
+  const credits = Array.isArray(value.credits) ? value.credits.filter(c => c && typeof c === 'object') : [];
+  if (!credits.length) details.append(node('div', '', 'Chưa có chi tiết hạn dùng'));
+  for (const credit of credits) {
+    const expiry = Number.isFinite(credit.expires_at)
+      ? new Date(credit.expires_at * 1000).toLocaleString('vi-VN', {timeZoneName:'short'})
+      : 'Chưa được báo cáo';
+    details.append(node('div', '', `${credit.title || 'Lượt reset'} · Hết hạn: ${expiry}`));
+  }
+  if (credits.length && credits.length < value.available_count)
+    details.append(node('small', '', `Chi tiết ${credits.length}/${value.available_count} lượt`));
+  cell.append(details);
+  if (view?.live && credits.length === value.available_count && credits.every(c => Number.isFinite(c.expires_at) && c.expires_at > Date.now()/1000)) {
+    const earliest = [...credits].sort((a,b)=>a.expires_at-b.expires_at)[0];
+    const button = node('button', 'button secondary account-refresh', 'Dùng reset sắp hết hạn');
+    button.disabled = busy;
+    button.addEventListener('click', async () => {
+      if(busy)return;
+      const name=account(identity)?.name || 'Account đã chọn';
+      const expiry=new Date(earliest.expires_at*1000).toLocaleString('vi-VN',{timeZoneName:'short'});
+      if(!await showResetDialog('Xác nhận dùng lượt reset', `Dùng 1 lượt reset cho ${name}?\nLượt sắp hết hạn nhất: ${earliest.title || 'Lượt reset'} · ${expiry}.\nThao tác khôi phục giới hạn đủ điều kiện (5h, tuần hoặc cả hai), tiêu thụ lượt reset và không hoàn tác. App sẽ kiểm tra lại hạn dùng trước khi gửi, sau đó refresh quota. Không đổi account hay handoff.`, true))return;
+      if(busy) {
+        showResetDialog('Chưa gửi yêu cầu reset', 'App đang cập nhật dữ liệu. Chờ hoàn tất rồi thử lại; chưa dùng lượt reset.');
+        return;
+      }
+      let operation;
+      try { operation=crypto.randomUUID(); }
+      catch(error) { showResetDialog('Chưa gửi yêu cầu reset', 'Trình duyệt không hỗ trợ tạo mã thao tác an toàn. Mở app bằng localhost hoặc 127.0.0.1.'); return; }
+      resetPending=true;
+      showResetDialog('Đang sử dụng lượt reset', `Đang kiểm tra và gửi yêu cầu cho ${name}. Chờ kết quả; không gửi lại thao tác.`);
+      $('reset-dialog-cancel').disabled=true;
+      await request('/api/quota/reset',{identity,expires_at:earliest.expires_at,operation});
+    });
+    cell.append(button);
+  }
+  return cell;
+}
+
 function quotaCell(window, error) {
   const cell = node('td');
   if (!window) { cell.append(node('span', 'quota-unknown', error ? '— Không đọc được quota' : '— Chưa được báo cáo')); return cell; }
@@ -118,7 +204,7 @@ function render() {
       request('/api/settings', {...view.settings, disabled: [...disabled]});
     });
     toggleCell.append(toggle);
-    row.append(cell, quotaCell(a.short,a.connection_error), quotaCell(a.weekly,a.connection_error), status, toggleCell); body.append(row);
+    row.append(cell, quotaCell(a.short,a.connection_error), quotaCell(a.weekly,a.connection_error), resetCreditsCell(a.reset_credits,a.id), status, toggleCell); body.append(row);
   }
   $('rotation-runner').hidden=!view.live;
   $('reserve').value = view.settings.reserve;
@@ -201,8 +287,8 @@ $('download').addEventListener('click', () => {
   const url = URL.createObjectURL(blob), link = node('a'); link.href = url; link.download = 'relay-rotation-plan.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 setInterval(updateClock, 1000);
-setInterval(()=>{if(!busy && view?.accounts.some(a=>a.refreshing))request('/api/state');},2000);
-setInterval(() => { if (!busy && !$('plan-dialog').open) request('/api/state'); }, 30000);
+setInterval(()=>{if(!busy && !$('reset-dialog').open && view?.accounts.some(a=>a.refreshing))request('/api/state');},2000);
+setInterval(() => { if (!busy && !$('reset-dialog').open && !$('plan-dialog').open) request('/api/state'); }, 30000);
 request('/api/state');
 
 async function accountAPI(path, data) {

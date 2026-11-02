@@ -107,6 +107,7 @@ def build_view(envelope, options=None, now=None, demo=False, max_age=60):
                   "Đủ quota ở tất cả cửa sổ được báo cáo")
         cards.append({"id": candidate.profile.identity, "name": candidate.profile.name,
                       "active": candidate.active, "short": short, "weekly": weekly,
+                      "reset_credits": (raw.get("usage") or {}).get("reset_credits"),
                       "windows": windows, "eligible": eligible, "excluded": excluded,
                       "bottleneck_remaining": bottleneck, "score": score, "reset_bonus": bonus,
                       "reason": reason, "can_keep": candidate.usage.eligible(now, threshold, max_age=age_limit) and not excluded})
@@ -344,6 +345,23 @@ def handler_for(store):
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict):
                     raise SnapshotError("Object required")
+                if self.path == '/api/quota/reset':
+                    if not store.collector or not store.accounts:
+                        self.respond(409,b'{"error":"Live quota required"}');return
+                    try:
+                        with store.operation_lock:
+                            result=store.collector.consume_reset(data.get('identity'),data.get('operation'),data.get('expires_at'))
+                            store.collector.cache.pop(data.get('identity'),None)
+                            with store.lock:
+                                store.force_refresh=True
+                            store._collect_once()
+                        payload=store.view()
+                        payload['reset_outcome']=result['reset_outcome']
+                        self.respond(200,json.dumps(payload,ensure_ascii=False).encode())
+                    except (QuotaError,AccountError,OSError,ValueError) as error:
+                        store.invalidate_live()
+                        self.respond(409,json.dumps({'error':str(error) if isinstance(error,QuotaError) else 'Không xác nhận được reset; kiểm tra quota trước khi thử lại.'},ensure_ascii=False).encode())
+                    return
                 if self.path in ('/api/proxy/checkpoint','/api/proxy/alias'):
                     if not store.proxy:
                         self.respond(409,b'{"error":"Proxy is not enabled"}');return

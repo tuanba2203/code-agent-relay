@@ -240,3 +240,15 @@ Lưu công việc trước khi xác nhận. Chạy server trong Terminal riêng 
 - **Hủy phiên đang chạy:** yêu cầu dừng job và tắt tự động để tránh chạy lại; giữ dữ liệu đã hoàn tất. Không hoàn tác sửa file project.
 
 Trong popup **Compact & chuyển account**, chọn **Tự chọn theo quota và thời điểm reset** hoặc account đích cụ thể (alias/email). Account hiện tại không nằm trong danh sách đích. Account chỉ định vẫn phải đủ quota và không bị disable; nếu không đạt thì job dừng, không fallback sang account khác. Lựa chọn áp dụng cho job thủ công hiện tại.
+
+### Lượt reset quota còn lại
+
+Bảng Quota Codex hiển thị số lượt reset còn lại và chi tiết hạn dùng theo múi giờ trình duyệt. Dữ liệu được đọc cùng quota qua `account/rateLimits/read` (`rateLimitResetCredits`), không gọi thao tác sử dụng reset. Mở “Hạn dùng lượt reset” để xem từng lượt, sắp theo hạn gần nhất.
+
+Số lượng từ provider được giữ nguyên dù danh sách chi tiết bị giới hạn. “Chưa có dữ liệu” khác với 0 lượt; “Chưa được báo cáo” không có nghĩa là không hết hạn. Nếu Codex/provider chưa trả trường này, hãy cập nhật CLI và Refresh; app không suy đoán dữ liệu thiếu. Thông tin phản ánh lần đọc quota gần nhất, dùng chung lịch polling hiện tại.
+
+Nguồn giao thức: https://learn.chatgpt.com/docs/app-server
+
+Nút **Dùng reset sắp hết hạn** yêu cầu xác nhận account và hạn dùng, sau đó đọc lại danh sách mới trước khi gửi `account/rateLimitResetCredit/consume` với ID lượt cụ thể và idempotency key. Chỉ cho dùng khi có đủ chi tiết tất cả lượt và hạn dùng còn hợp lệ; không suy đoán lượt gần nhất từ danh sách bị thiếu. Provider quyết định cửa sổ đủ điều kiện được khôi phục. Sau kết quả xác nhận, đọc lại quota.
+
+Ý định gửi được ghi bền vững trong `.relay-accounts/reset-operations.json` trước redemption. Nếu gián đoạn hoặc kết quả không rõ, không tự retry và khóa thêm reset của account đó qua restart. Kiểm tra lịch sử trên Codex trước khi xử lý trạng thái này; hiện chưa có UI phục hồi riêng. Không xóa journal để thử lại mù. Thao tác dùng lượt thật chỉ xảy ra khi người dùng xác nhận nút; test dùng RPC giả lập.

@@ -61,7 +61,7 @@
         bonus=Math.round(rawBonus*100)/100;
         score=Math.round((wr*.45+sr*.20+bottleneck*.10+rawBonus)*100)/100;
       }
-      return {id:a.account_key,name:typeof a.alias==='string' && a.alias ? a.alias:typeof a.email==='string' && a.email ? a.email:a.account_key,active:a.active,short,weekly,windows,eligible,excluded,bottleneck_remaining:bottleneck,score,reset_bonus:bonus,can_keep:keep,
+      return {id:a.account_key,name:typeof a.alias==='string' && a.alias ? a.alias:typeof a.email==='string' && a.email ? a.email:a.account_key,active:a.active,short,weekly,reset_credits:usage.reset_credits || null,windows,eligible,excluded,bottleneck_remaining:bottleneck,score,reset_bonus:bonus,can_keep:keep,
         reason:excluded?'Đã tạm loại khỏi vòng rotate':stale?'Dữ liệu đã cũ; cần đọc quota mới':reason?'Quota chưa được xác nhận':!eligible?'Chưa đủ dư địa cho một phiên mới':'Đủ quota ở tất cả cửa sổ được báo cáo'};
     });
     const active=accounts.find(a=>a.active); if (!active && doc.active_account_key !== null) throw new Error('Không có account đang dùng.');
