@@ -73,7 +73,7 @@
       if(limiting.length && limiting.every(w=>number(w.resets_at)&&w.resets_at>now&&w.resets_at-now<=300))waitUntil=Math.max(...limiting.map(w=>w.resets_at))+1;
     }
     const action=!active?'pause':active.can_keep?'keep':waitUntil?'wait_reset':ranked.length?'handoff':'pause';
-    return {demo:isDemo,received_at:received,now,stale:now-received>60,accounts,active:active?.id || null,target:action==='handoff'?ranked[0].id:null,ranking:ranked.map(a=>a.id),action,reset_wait_until:waitUntil,settings:opts,threshold,entry_threshold:entry,execution_enabled:false,integration:{desktop:'unverified',vscode:'unverified'},csrf:'offline'};
+    return {demo:isDemo,received_at:received,now,stale:now-received>60,accounts,active:active?.id || null,target:action==='handoff'?ranked[0].id:null,ranking:ranked.map(a=>a.id),action,reset_wait_until:waitUntil,settings:opts,threshold,entry_threshold:entry,execution_enabled:false,integration:{desktop:'unverified',vscode:'unverified'},csrf:'offline',antigravity:{enabled:false,profiles:[]}};
   }
   let imported=null, currentOptions=options(), demoEnabled=false;
   globalThis.RELAY_LOCAL = {

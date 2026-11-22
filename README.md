@@ -2,7 +2,7 @@
 
 **Dashboard chạy trên máy cá nhân để quản lý nhiều tài khoản Codex, theo dõi quota và bàn giao công việc giữa các tài khoản.**
 
-Relay giúp bạn biết account nào đang được sử dụng, quota còn lại và thread nào thuộc cùng một công việc. Khi cần chuyển account, tool có thể compact cuộc hội thoại, xuất bản bàn giao Markdown và nạp context vào thread tương ứng của account đích.
+Relay giúp bạn biết account nào đang được sử dụng, quota còn lại, rồi đổi tài khoản Codex hoặc Antigravity trên máy.
 
 Dự án độc lập, không phải sản phẩm chính thức của OpenAI. Không cần hosting riêng; tài khoản và dữ liệu quản lý nằm trên máy của bạn. Các thao tác Codex vẫn cần quyền sử dụng hợp lệ và tiêu thụ quota theo tài khoản.
 
@@ -10,11 +10,9 @@ Dự án độc lập, không phải sản phẩm chính thức của OpenAI. Kh
 
 ## Mục đích
 
-- Theo dõi quota Codex của nhiều tài khoản trong một dashboard.
+- Theo dõi quota Codex và Antigravity của nhiều tài khoản trong một dashboard.
 - Quản lý profile đăng nhập, alias và backup tài khoản.
-- Chọn account đích dựa trên quota còn lại và thời điểm reset.
-- Giữ một workflow chung xuyên nhiều account, tránh tạo thread trùng mỗi lần quay lại.
-- Lưu journal, handoff và lịch sử để người dùng kiểm soát và debug.
+- Đổi tài khoản Codex hoặc Antigravity trực tiếp từ danh sách Tài khoản.
 
 Relay không cộng quota thành một pool và không tăng giới hạn của nhà cung cấp. Quota ChatGPT không nằm trong dashboard.
 
@@ -24,6 +22,19 @@ Có chế độ proxy subscription opt-in: `python3 dashboard.py --port 8766 --p
 
 Chưa kiểm thử với desktop/VS Code thật; không bật mặc định, không tự đổi cấu hình client hoặc tự gọi model để checkpoint. Context được lưu riêng trên máy để phục hồi; lỗi gián đoạn không tự replay. Xem [docs/smart-proxy.md](docs/smart-proxy.md) để cấu hình, giới hạn và bài thử A → B.
 
+## Google Gemini CLI
+
+Dashboard không còn panel Gemini Google. Codex và Antigravity là hai nguồn tài khoản trên giao diện.
+
+## Antigravity IDE (Keychain, cách B)
+
+Panel **Antigravity** lưu snapshot token đang nằm trong macOS Keychain
+(`gemini` / `antigravity`) rồi đổi tài khoản bằng cách đóng IDE, ghi token đã
+lưu, mở lại. Mục **Tài khoản** trên tổng quan liệt kê các snapshot đã quản lý
+cạnh bảng Codex, kèm hạn mức 5 giờ/tuần và lịch reset nếu Google báo cáo. Mỗi lúc chỉ một phiên sống. Token đã lưu gần như tương đương đăng
+nhập sẵn: vault quyền 700, không đặt trên iCloud, ACL Keychain chỉ
+Antigravity.app và `/usr/bin/security`. Xem [hướng dẫn Antigravity](docs/antigravity-ide.md).
+
 ## Tính năng
 
 | Nhóm | Chức năng |
@@ -31,9 +42,7 @@ Chưa kiểm thử với desktop/VS Code thật; không bật mặc định, kh�
 | Account | Thêm đăng nhập, sửa alias, xóa profile local, import/export mã hóa |
 | Quota | Quota ngắn hạn/tuần nếu được báo cáo, thời điểm reset, refresh và countdown |
 | Rotation | Thủ công hoặc tự động theo ngưỡng, chọn đích theo quota/reset |
-| Context | Compact, xuất Markdown, checksum, import vào thread mới hoặc đã liên kết |
-| Workflow | Mapping account–thread, alias chung, lịch sử và đồng bộ tên |
-| Recovery | Journal bền vững, bản sao phiên nguồn, xác nhận sau lỗi |
+| Recovery | Journal bền vững khi đổi tài khoản bị gián đoạn |
 | Giao diện | Log lưu local qua restart, light/dark theme |
 
 ## Yêu cầu
@@ -165,6 +174,7 @@ Khi lỗi, Relay giữ handoff/journal, không tự replay. Engine hiện có th
 
 ```text
 accounts.py          Profile, alias, file-auth switching
+antigravity_provider.py  Snapshot Keychain Antigravity, đóng/mở IDE
 onboarding.py        Luồng đăng nhập
 live_quota.py        app-server và quota
 quota_schedule.py    Lịch polling
@@ -181,7 +191,7 @@ test_*.py            Bộ test
 
 ## Dữ liệu và quyền riêng tư
 
-Mặc định `.relay-accounts/` cạnh source lưu credential profile, backup đăng nhập, registry, journal, log, handoff, bản sao phiên và kết quả continuation.
+Mặc định `.relay-accounts/` cạnh source lưu credential profile, backup đăng nhập, registry, journal, log, handoff, bản sao phiên, snapshot Antigravity và kết quả continuation. Snapshot Antigravity nằm trong `antigravity/` (0700, `.nosync`); token đó tương đương phiên đăng nhập sẵn.
 
 File/thư mục riêng được tạo với quyền hạn chế. **Vault local không được mã hóa toàn bộ at rest.** File export qua UI được mã hóa bằng mật khẩu; dữ liệu nội bộ và CLI export không được coi là backup mã hóa tương đương.
 

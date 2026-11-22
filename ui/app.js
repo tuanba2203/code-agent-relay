@@ -17,7 +17,33 @@ function until(ts) {
 function account(id) { return view.accounts.find(a => a.id === id); }
 function setBusy(value) {
   busy = value;
-  for (const el of document.querySelectorAll('#refresh,#import,#demo,#reserve,#margin,.toggle,.account-refresh,[data-strategy]')) el.disabled = value || el.dataset.refreshing === 'true' || (!view && el.id !== 'refresh') || (view?.live && ['import','demo'].includes(el.id));
+  for (const el of document.querySelectorAll('#refresh,#import,#demo,.account-refresh,.use-account,.antigravity-refresh')) el.disabled = value || el.dataset.refreshing === 'true' || (!view && el.id !== 'refresh') || (view?.live && ['import','demo'].includes(el.id));
+}
+let pendingUse = null;
+function canSwitchAccounts() {
+  return !window.RELAY_LOCAL && !!view?.account_management && !busy;
+}
+function useAccountButton(kind, id, name, current, blocked) {
+  const button = node('button', current ? 'button secondary use-account' : 'button primary use-account', current ? 'Đang dùng' : 'Dùng account này');
+  button.disabled = !!current || !!blocked || !canSwitchAccounts();
+  if (blocked) button.title = blocked;
+  button.addEventListener('click', () => askUseAccount(kind, id, name));
+  return button;
+}
+function useAccountCell(kind, id, name, current, blocked) {
+  const cell = node('td', 'toggle-cell');
+  cell.append(useAccountButton(kind, id, name, current, blocked));
+  return cell;
+}
+function askUseAccount(kind, id, name) {
+  if (!canSwitchAccounts()) return;
+  pendingUse = {kind, id, name};
+  $('use-account-title').textContent = 'Dùng account này';
+  $('use-account-message').textContent = kind === 'antigravity'
+    ? `Đóng Antigravity IDE, ghi token của ${name} vào Keychain, rồi mở lại? Token đã lưu tương đương đăng nhập sẵn.`
+    : `Đổi đăng nhập Codex sang ${name}? Đóng Codex desktop, VS Code và CLI trước. Không chuyển context.`;
+  $('use-account-error').textContent = '';
+  $('use-account-dialog').showModal();
 }
 let resetDialogResolve = null;
 let resetPending = false;
@@ -67,7 +93,7 @@ async function request(path, data) {
     render();
     if(path === '/api/quota/reset') { resetPending=false; $('reset-dialog').close('done'); }
     if(payload.reset_outcome)showResetDialog('Kết quả dùng lượt reset', ({reset:'Đã dùng lượt reset và đọc lại quota.',alreadyRedeemed:'Yêu cầu reset đã hoàn tất trước đó; quota đã được đọc lại.',nothingToReset:'Không có giới hạn đủ điều kiện reset; provider không thực hiện reset.',noCredit:'Provider báo không còn lượt reset khả dụng.'})[payload.reset_outcome]);
-    if(location.hash==='#login' && !$('saved-accounts').children.length)routePage();
+    if((location.hash==='#login' || location.hash==='#codex-provider') && !$('saved-accounts').children.length)routePage();
   } catch (error) {
     if(path === '/api/quota/reset') {
       resetPending=false; $('reset-dialog').close('error');
@@ -76,7 +102,6 @@ async function request(path, data) {
     $('error').hidden = false;
     $('error').textContent = `Dừng thao tác: ${error.message} Kiểm tra trạng thái trước khi thử lại.`;
     $('snapshot-badge').textContent = 'KHÔNG XÁC NHẬN';
-    $('preview').disabled = true;
   } finally { setBusy(false); }
 }
 function resetCreditsCell(value, identity) {
@@ -126,9 +151,8 @@ function resetCreditsCell(value, identity) {
   return cell;
 }
 
-function quotaCell(window, error) {
-  const cell = node('td');
-  if (!window) { cell.append(node('span', 'quota-unknown', error ? '— Không đọc được quota' : '— Chưa được báo cáo')); return cell; }
+function quotaBar(window, label) {
+  const wrap = node('div', 'quota-block');
   const remaining = 100 - window.used;
   const line = node('div', 'quota-top');
   line.append(node('strong', '', pct(remaining)), node('span', '', `đã dùng ${pct(window.used)}`));
@@ -137,19 +161,33 @@ function quotaCell(window, error) {
   fill.style.width = `${Math.max(0, Math.min(100, remaining))}%`;
   bar.setAttribute('role', 'meter'); bar.setAttribute('aria-valuenow', String(remaining));
   bar.setAttribute('aria-valuemin', '0'); bar.setAttribute('aria-valuemax', '100');
-  bar.setAttribute('aria-label', 'Quota còn lại'); bar.append(fill);
-  cell.append(line, bar, node('div', 'quota-reset', until(window.resets_at)));
+  bar.setAttribute('aria-label', label ? `Quota còn lại · ${label}` : 'Quota còn lại'); bar.append(fill);
+  wrap.append(line, bar, node('div', 'quota-reset', until(window.resets_at)));
+  if (label) wrap.append(node('div', 'quota-reset', label));
+  return wrap;
+}
+function quotaCell(window, error, groups, kind) {
+  const cell = node('td');
+  const rows = Array.isArray(groups) ? groups.filter(group => group && group[kind]) : [];
+  if (rows.length) {
+    for (const group of rows) cell.append(quotaBar(group[kind], group.name));
+    return cell;
+  }
+  if (!window) { cell.append(node('span', 'quota-unknown', error ? '— Không đọc được quota' : '— Chưa được báo cáo')); return cell; }
+  cell.append(quotaBar(window, window.group));
   return cell;
 }
 function render() {
-  const active = account(view.active) || {name:"Chưa chọn", token_summary:null}, target = account(view.target);
+  const active = account(view.active) || {name:"Chưa chọn", token_summary:null};
   const manage=$('manage-accounts');
   manage.setAttribute('aria-disabled',String(!view.account_management));
   manage.title=view.account_management?'Quản lý tài khoản, alias và backup':'Cần dashboard live để quản lý tài khoản';
   $('mode-title').textContent = view.live ? (view.loading ? 'Đang đọc quota Codex thật…' : view.stale ? 'Quota live đã cũ · cần cập nhật' : 'Đã kết nối Codex local · quota thật') : view.demo ? 'Bản xem trước · dữ liệu mô phỏng' : view.stale ? 'Snapshot đã cũ' : 'Snapshot quota · không phải kết nối trực tiếp';
   $('mode-text').textContent = view.live ? (view.live_error || 'Kiểm tra riêng từng account theo quota, mức hoạt động và trạng thái. Account đang dùng được xác định từ file đăng nhập local.') : view.demo ? '4 tài khoản mẫu. Không có tài khoản thật được kết nối hoặc chuyển đổi.' : view.stale ? 'Quota quá 60 giây sẽ không được dùng để đề xuất chuyển.' : 'Chỉ dùng metadata bạn cung cấp. Tài khoản trong app chưa được xác nhận.';
-  $('count').textContent = view.accounts.length;
-  $('nav-count').textContent = view.accounts.length;
+  const antigravityRows = (view.antigravity && view.antigravity.profiles) || [];
+  const managedCount = view.accounts.length + antigravityRows.filter(profile => !profile.archived).length;
+  $('count').textContent = managedCount;
+  $('nav-count').textContent = managedCount;
   $('ready').textContent = view.accounts.filter(a => a.eligible && !a.active).length;
   $('ready-total').textContent = ` / ${view.accounts.length}`;
   $('active-name').textContent = active.name;
@@ -173,7 +211,7 @@ function render() {
     let state = 'Sẵn sàng', className = 'row-state';
     if (a.excluded) { state = 'Đã tạm loại'; className += ' amber'; }
     else if (view.stale || a.reason === 'Quota chưa được xác nhận' || a.reason.startsWith('Dữ liệu')) { state = 'Cần refresh'; className += ' amber'; }
-    else if (a.active) { state = a.can_keep ? 'Đang sử dụng' : 'Cần bàn giao'; className += a.can_keep ? ' active' : ' amber'; }
+    else if (a.active) { state = a.can_keep ? 'Đang sử dụng' : 'Quota thấp'; className += a.can_keep ? ' active' : ' amber'; }
     else if (!a.eligible) { state = 'Chưa đủ dư địa'; className += ' amber'; }
     const status = node('td'); const badge = node('span', className, `● ${state}`); badge.title = a.reason; status.append(badge);
     if(a.connection_error)status.append(node('small','',a.connection_error));
@@ -196,41 +234,98 @@ function render() {
       changed.style.display='block';status.append(changed);
     }
 
-    const toggleCell = node('td', 'toggle-cell'), toggle = node('input', 'toggle');
-    toggle.type = 'checkbox'; toggle.checked = !a.excluded; toggle.setAttribute('aria-label', `Cho ${a.name} tham gia rotate`);
-    toggle.addEventListener('change', () => {
-      const disabled = new Set(view.settings.disabled);
-      if (toggle.checked) disabled.delete(a.id); else disabled.add(a.id);
-      request('/api/settings', {...view.settings, disabled: [...disabled]});
-    });
-    toggleCell.append(toggle);
-    row.append(cell, quotaCell(a.short,a.connection_error), quotaCell(a.weekly,a.connection_error), resetCreditsCell(a.reset_credits,a.id), status, toggleCell); body.append(row);
+    row.append(cell, quotaCell(a.short,a.connection_error), quotaCell(a.weekly,a.connection_error), resetCreditsCell(a.reset_credits,a.id), status, useAccountCell('codex', a.id, a.name, a.active)); body.append(row);
   }
-  $('rotation-runner').hidden=!view.live;
-  $('reserve').value = view.settings.reserve;
-  $('reserve-value').textContent = view.settings.reserve;
-  $('margin').value = view.settings.margin;
-  $('margin-value').textContent = view.settings.margin;
-  for (const button of document.querySelectorAll('[data-strategy]')) {
-    const selected = button.dataset.strategy === view.settings.strategy;
-    button.classList.toggle('active', selected); button.setAttribute('aria-pressed', String(selected));
-  }
-  $('strategy-description').textContent = view.settings.strategy === 'balanced' ? 'Giữ account hiện tại khi còn đủ quota. Khi cần chuyển, chọn account có mức dư thấp nhất giữa các cửa sổ cao nhất.' : 'Ưu tiên quota tuần còn nhiều và gần reset, sau đó xét quota 5 giờ và dư địa của phiên. Account mới phải còn trên 30% ở cả hai cửa sổ, hoặc cao hơn theo cấu hình dự phòng.';
-  $('policy-summary').textContent = `Bàn giao khi dùng từ ${view.threshold}% ở bất kỳ cửa sổ nào. Account nhận phiên mới phải dùng dưới ${view.entry_threshold}% ở tất cả cửa sổ. Nếu cửa sổ đang cạn sắp reset trong 5 phút, ưu tiên chờ và đọc lại quota. Cài đặt chỉ lưu trong phiên dashboard này.`;
-  $('decision-title').textContent = view.action==='wait_reset'?`Chờ reset trên ${active.name}.`:view.action === 'keep' ? `Tiếp tục với ${active.name}.` : view.action === 'handoff' ? `Chuẩn bị chuyển sang ${target.name}.` : 'Tạm dừng và đọc lại quota.';
-  $('decision-copy').textContent = view.action==='wait_reset'?'Quota đang hạn chế sẽ reset trong vòng 5 phút. Chưa compact hoặc chuyển account; đọc lại quota sau reset để xác nhận trước khi tiếp tục.':view.action === 'keep' ? 'Chưa cần chuyển: quota vẫn đủ phần dự phòng. Giữ phiên hiện tại giúp giảm chi phí bàn giao và mất context.' : view.action === 'handoff' ? `${active.name} đã chạm ngưỡng hoặc bị loại. ${target.name} có ${pct(target.bottleneck_remaining)} dư địa ở cửa sổ hạn chế nhất.` : 'Chưa có account nhận phiên mới đủ điều kiện. Không đoán quota đã hồi chỉ dựa trên giờ reset.';
-  $('route-from').textContent = active.name;
-  $('route-to').textContent = target?.name || (view.action==='wait_reset'?'Chờ reset':view.action === 'keep' ? 'Giữ phiên' : 'Chờ dữ liệu');
-  const ranking = $('ranking'); ranking.replaceChildren();
-  view.ranking.forEach((id, index) => {
-    const a = account(id), row = node('div', 'rank');
-    row.append(node('span', 'rank-number', `0${index + 1}`), node('span', '', a.name),
-      node('span', 'rank-score', `${pct(a.bottleneck_remaining)} dư địa · ${a.score}/100 điểm${a.reset_bonus ? ` · lợi thế reset ${a.reset_bonus}` : ''}`));
-    ranking.append(row);
-  });
-  if (!view.ranking.length) ranking.append(node('p', 'method-note', 'Chưa có ứng viên đã xác nhận.'));
-  $('preview').disabled = false;
+  renderAntigravityAccounts();
   updateClock();
+}
+let antigravityQuotaTimer = null;
+let antigravityRefreshing = new Set();
+async function refreshAntigravityQuota(identity) {
+  if (window.RELAY_LOCAL || busy || antigravityRefreshing.has(identity) || !view?.account_management) return;
+  antigravityRefreshing.add(identity);
+  renderAntigravityAccounts();
+  try {
+    await accountAPI('/api/providers/antigravity/quota', {identity});
+    await request('/api/state');
+  } catch (error) {
+    $('error').hidden = false;
+    $('error').textContent = error.message;
+  } finally {
+    antigravityRefreshing.delete(identity);
+    if (view) renderAntigravityAccounts();
+  }
+}
+function renderAntigravityAccounts() {
+  const body = $('antigravity-accounts-body');
+  const badge = $('antigravity-accounts-badge');
+  const refreshBtn = $('antigravity-quota-refresh');
+  if (!body) return;
+  body.replaceChildren();
+  const summary = view.antigravity || {enabled:false, profiles:[]};
+  const profiles = summary.profiles || [];
+  if (refreshBtn) refreshBtn.disabled = !summary.enabled || window.RELAY_LOCAL || busy;
+  if (badge) badge.textContent = summary.enabled ? (summary.pending_recovery ? 'CẦN KHÔI PHỤC' : summary.live && summary.live.readable ? 'KEYCHAIN' : 'VAULT') : 'TẮT';
+  if (!summary.enabled) {
+    const row = node('tr');
+    const cell = node('td','', 'Chưa bật quản lý Antigravity. Chạy dashboard với account mode để lưu snapshot Keychain.');
+    cell.colSpan = 6;
+    row.append(cell); body.append(row);
+    return;
+  }
+  if (!profiles.length) {
+    const row = node('tr');
+    const cell = node('td','', 'Chưa có snapshot Antigravity. Đăng nhập trong IDE rồi lưu phiên trên trang Antigravity.');
+    cell.colSpan = 6;
+    row.append(cell); body.append(row);
+    return;
+  }
+  let loading = false;
+  for (const profile of profiles) {
+    const row = node('tr', profile.selected ? 'current' : '');
+    const cell = node('td');
+    const block = node('div', 'account-cell');
+    const name = profile.alias || profile.email || profile.name || (profile.id || '?').slice(0, 12);
+    const icon = node('div', 'account-icon', String(name).slice(0, 1).toUpperCase());
+    const label = node('div'), top = node('div', 'account-top');
+    top.append(node('strong', '', name));
+    if (profile.selected) top.append(node('span', 'mini-active'));
+    label.append(top, node('small', '', profile.email || (profile.archived ? 'Đã lưu trữ trên Relay' : 'Antigravity IDE · snapshot Keychain')));
+    block.append(icon, label); cell.append(block);
+    const quota = profile.quota || {};
+    const plan = node('td', '', quota.plan || '—');
+    const failed = quota.status && quota.status !== 'ok' && quota.status !== 'loading';
+    const quotaError = failed ? (quota.error || 'Không đọc được quota') : (quota.status === 'loading' ? 'Đang đọc quota' : null);
+    loading = loading || quota.status === 'loading';
+    let state = 'Đã lưu', className = 'row-state';
+    if (profile.archived) { state = 'Đã lưu trữ'; className += ' amber'; }
+    else if (quota.status === 'loading') { state = 'Đang đọc quota'; className += ' amber'; }
+    else if (failed) { state = 'Cần refresh'; className += ' amber'; }
+    else if (profile.selected) { state = 'Keychain hiện tại'; className += ' active'; }
+    else { state = 'Snapshot đã lưu'; }
+    const status = node('td');
+    status.append(node('span', className, `● ${state}`));
+    if (quota.stale) status.append(node('small','','Số liệu đã cũ'));
+    const blocked = profile.archived ? 'Snapshot đã lưu trữ' : (summary.pending_recovery ? 'Cần khôi phục lần chuyển bị gián đoạn' : '');
+    const actions = node('td', 'toggle-cell');
+    const stack = node('div', 'account-actions');
+    const refreshing = antigravityRefreshing.has(profile.id);
+    const refresh = node('button', 'button secondary antigravity-refresh', refreshing ? 'Đang đọc…' : '↻ Quota');
+    refresh.disabled = !!profile.archived || window.RELAY_LOCAL || busy || refreshing || !view?.account_management;
+    refresh.dataset.refreshing = String(refreshing);
+    refresh.setAttribute('aria-label', `Đọc quota ${name}`);
+    refresh.addEventListener('click', () => refreshAntigravityQuota(profile.id));
+    stack.append(refresh, useAccountButton('antigravity', profile.id, name, profile.selected, blocked));
+    actions.append(stack);
+    row.append(cell, plan, quotaCell(quota.short, quotaError, quota.groups, 'short'), quotaCell(quota.weekly, quotaError, quota.groups, 'weekly'), status, actions);
+    body.append(row);
+  }
+  if (loading && !antigravityQuotaTimer && !window.RELAY_LOCAL) {
+    antigravityQuotaTimer = setTimeout(() => {
+      antigravityQuotaTimer = null;
+      if (!busy) request('/api/state');
+    }, 1500);
+  }
 }
 function updateClock() {
   for(const el of document.querySelectorAll('.quota-countdown')) {
@@ -243,21 +338,6 @@ function updateClock() {
     $('freshness').textContent = age < 60 ? `${age}s` : `${Math.floor(age / 60)}p`;
     if (!view.live && !view.demo && age > 60 && !view.stale && !busy) request('/api/state');
   }
-}
-function preview() {
-  if (!view) return;
-  const box = $('plan-content'); box.replaceChildren();
-  box.append(node('p', '', view.demo ? 'Đây là kế hoạch mô phỏng. Không đổi account, gửi prompt hoặc thực hiện tác vụ thật.' : 'Đây chỉ là kế hoạch. Adapter desktop và VS Code chưa được xác nhận; không đổi tài khoản thật.'));
-  const steps = view.action==='wait_reset'?['Giữ account hiện tại; chưa compact hay handoff.','Chờ cửa sổ quota đang hạn chế reset trong vòng 5 phút.','Đọc quota mới để xác nhận. Nếu quota chưa hồi, đánh giá lại điều kiện chuyển.']:view.action === 'keep' ? ['Giữ phiên hiện tại.', 'Theo dõi quota ở cả hai cửa sổ.', 'Tạo checkpoint ở ranh giới tác vụ khi tích hợp được kết nối.'] : view.action === 'pause' ? ['Dừng lập lịch tác vụ mới.', 'Đọc lại quota đã xác nhận hoặc đợi reset.', 'Không tự thử qua lại giữa các tài khoản.'] : [
-    `Ngừng nhận tác vụ mới trên desktop và VS Code của ${account(view.active).name}.`,
-    'Đợi công cụ đang chạy kết thúc; kiểm tra các tác động chưa rõ.',
-    'Tạo bản compact và lưu file handoff cho từng chat. Nếu thất bại, dừng chuyển.',
-    `Đọc lại quota của ${account(view.target).name}; chỉ chuyển nếu vẫn đủ dư địa.`,
-    'Đổi tài khoản và xác nhận danh tính trên cả desktop lẫn VS Code.',
-    'Nạp handoff; kiểm tra trạng thái file và hành động trước khi tiếp tục.'
-  ];
-  const list = node('ol'); steps.forEach(text => list.append(node('li', '', text))); box.append(list);
-  $('plan-dialog').showModal();
 }
 $('refresh').addEventListener('click', async () => {
   if (view?.live) { await request('/api/refresh', {}); setTimeout(() => request('/api/state'), 2000); }
@@ -273,22 +353,9 @@ $('import-file').addEventListener('change', async event => {
   } catch (error) { $('error').hidden = false; $('error').textContent = `Không nhập được snapshot: ${error.message}`; }
   event.target.value = '';
 });
-for (const id of ['reserve','margin']) {
-  $(id).addEventListener('input', event => $(`${id}-value`).textContent = event.target.value);
-  $(id).addEventListener('change', event => request('/api/settings', {...view.settings, [id]: Number(event.target.value)}));
-}
-for (const button of document.querySelectorAll('[data-strategy]')) button.addEventListener('click', () => request('/api/settings', {...view.settings, strategy: button.dataset.strategy}));
-$('preview').addEventListener('click', preview);
-$('close-dialog').addEventListener('click', () => $('plan-dialog').close());
-$('done').addEventListener('click', () => $('plan-dialog').close());
-$('download').addEventListener('click', () => {
-  const {csrf, ...safe} = view;
-  const blob = new Blob([JSON.stringify({...safe, executed:false}, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob), link = node('a'); link.href = url; link.download = 'relay-rotation-plan.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
 setInterval(updateClock, 1000);
 setInterval(()=>{if(!busy && !$('reset-dialog').open && view?.accounts.some(a=>a.refreshing))request('/api/state');},2000);
-setInterval(() => { if (!busy && !$('reset-dialog').open && !$('plan-dialog').open) request('/api/state'); }, 30000);
+setInterval(() => { if (!busy && !$('reset-dialog').open && !$('use-account-dialog').open) request('/api/state'); }, 30000);
 request('/api/state');
 
 async function accountAPI(path, data) {
@@ -442,229 +509,59 @@ $('backup-file').addEventListener('change',async()=>{
   finally{accountBusy=false;$('backup-password').value='';$('backup-file').value='';}
 });
 
-let rotationState=null, rotationBusy=false;
-const rotationLabels={idle:'Sẵn sàng',waiting_reset:'Chờ quota reset',queued:'Đã xếp lịch',waiting_clients_closed:'Chờ đóng client',preflight:'Xác minh',compacting:'Đang compact',exporting:'Đang tạo handoff',exported:'Đã export',switching:'Đang đổi account',importing:'Đang import',imported:'Đã import',continuing:'Đang tiếp tục',complete:'Hoàn tất',checkpoint_complete:'Đã lưu checkpoint',failed:'Đã dừng do lỗi',cancelled:'Đã hủy',recovery_required:'Cần phục hồi'};
-function renderRotation(state){
-  rotationState=state;
-  const job=state.job||{},config=state.config||{};
-  $('rotation-phase').textContent=rotationLabels[job.phase]||job.phase;
-  const stopped=['failed','recovery_required','cancelled'].includes(job.phase);
-  $('rotation-message').textContent=(stopped?'Trạng thái lịch sử (không phải kiểm tra hiện tại): ':'')+(job.message||'Chưa có phiên rotate.');
-  let clientStatus=$('rotation-client-status');
-  if(!clientStatus){clientStatus=node('p','account-help');clientStatus.id='rotation-client-status';$('rotation-message').after(clientStatus);}
-  clientStatus.hidden=!state.client_check;
-  clientStatus.textContent=state.client_check?`Kiểm tra hiện tại: ${state.client_check.message}`:'';
-  $('rotation-recovery').disabled=rotationBusy||state.busy||state.client_check?.clear===false;
-  $('rotation-auto-toggle').checked=!!config.enabled;
-  $('rotation-auto-toggle').disabled=rotationBusy||(!config.enabled&&(state.busy||['failed','recovery_required'].includes(job.phase)));
-  $('rotation-cancel').disabled=rotationBusy||!state.busy;
-  $('rotation-config-summary').textContent=`${config.workflow_ids?.length||config.threads?.length||0} luồng · Tự động: ${config.enabled?'bật':'tắt'} · Tiếp tục bằng Relay: ${config.continue_work?'bật':'tắt'}`+(state.file_auth_ready?'':` · Cần thiết lập cli_auth_credentials_store = \"file\" ở đầu ${state.codex_home}/config.toml và đăng nhập lại trước khi chạy.`);
-  for(const id of ['rotation-start','rotation-checkpoint','rotation-settings'])$(id).disabled=state.busy||rotationBusy;
-  const missing=(state.managed_threads||[]).filter(flow=>(config.workflow_ids||[]).includes(flow.id)&&!flow.bindings[state.active_account]);
-  let mappingStatus=$('rotation-mapping-status');
-  if(!mappingStatus){mappingStatus=node('p','account-help');mappingStatus.id='rotation-mapping-status';$('rotation-config-summary').after(mappingStatus);}
-  mappingStatus.hidden=!missing.length;
-  mappingStatus.textContent=missing.length?`Chưa thể rotate: ${missing.map(flow=>flow.label).join(', ')} chưa có thread trên account hiện tại. ${['failed','recovery_required'].includes(job.phase)?'Đóng client và chọn “Xác nhận sau phục hồi”, sau đó ':''}mở luồng bên dưới và chọn “Nạp handoff còn thiếu”.`:'';
-  if(missing.length)for(const id of ['rotation-start','rotation-checkpoint'])$(id).disabled=true;
-  $('rotation-recovery').hidden=!['failed','cancelled','recovery_required'].includes(job.phase);
-  const artifacts=$('rotation-artifacts');artifacts.replaceChildren();
-  if(job.failed_phase)artifacts.append(node('p','account-help',`Dừng tại bước: ${rotationLabels[job.failed_phase]||job.failed_phase}. ${job.rolled_back?'Đã xác minh hoàn nguyên account.':'Kiểm tra account trước khi tiếp tục.'}`));
-  if(job.directory)artifacts.append(node('p','account-help',`Thư mục handoff / journal: ${job.directory}`));
-  for(const h of job.handoffs||[]){
-    const link=node('a','button secondary handoff-artifact',`↓ ${h.file}`);
-    link.href='/api/rotation/handoff?name='+encodeURIComponent(h.file);link.download=h.file;artifacts.append(link);
-  }
-  const logBox=$('relay-log-output');
-  const logText=(state.logs||[]).map(row=>`${new Date(row.time*1000).toLocaleString('vi-VN')} [${row.level.toUpperCase()}] [${row.job_id?.slice(0,8)||'server'}] ${rotationLabels[row.phase]||row.phase}${row.context?` · Account: ${row.context.account_name||row.context.account_id||'—'} · Thread: ${row.context.alias||'—'} (${row.context.thread_id||'đang tạo'})`:(row.source_account?.id||row.target_account?.id)?` · ${row.source_account?.name||'—'} → ${row.target_account?.name||'—'}`:''}: ${row.message}`).join('\n');
-  if(logBox.textContent!==logText){logBox.textContent=logText||'Chưa có log.';if($('relay-log-follow').checked)logBox.scrollTop=logBox.scrollHeight;}
-  $('relay-log-status').textContent=state.busy?`Đang chạy: ${rotationLabels[job.phase]||job.phase}`:`Hiện tại: ${rotationLabels[job.phase]||job.phase} · ${(state.logs||[]).length} mốc đã lưu`;
-  renderManagedWorkflows(state);
-  for(const imported of job.imports||[]){
-    const line=node('p','handoff-artifact',`${imported.imported?'Đã import':'Chưa xác nhận import'} · ${imported.label||'Luồng công việc'} · ${imported.reused?'Dùng lại thread':'Tạo thread'}: `);
-    line.append(node('code','',imported.id));line.append(node('small','',` · ${imported.cwd}`));artifacts.append(line);
-  }
-}
-async function pollRotation(){
-  if(!view?.live||rotationBusy)return;
-  try{renderRotation(await accountAPI('/api/rotation'));}
-  catch(error){$('rotation-message').textContent=error.message;}
-}
-async function rotationAction(path,data={}){
-  if(rotationBusy)return;
-  rotationBusy=true;
-  let failure=null;
-  try{renderRotation(await accountAPI(path,data));}
-  catch(error){failure=error.message;}
-  finally{rotationBusy=false;if(rotationState)renderRotation(rotationState);if(failure)$('rotation-message').textContent=failure;}
-}
-$('rotation-settings').addEventListener('click',async()=>{
-  if(!view?.live)return;
-  try{
-    const [state,result]=await Promise.all([accountAPI('/api/rotation'),accountAPI('/api/rotation/sessions')]);
-    renderRotation(state);
-    const selectedFlows=new Set(state.config.workflow_ids||[]),selected=new Set(state.config.threads);
-    const known=new Set(),workflows=$('rotation-workflows');workflows.replaceChildren();
-    for(const flow of state.managed_threads||[]){
-      for(const binding of Object.values(flow.bindings))known.add(binding.thread_id);
-      const binding=flow.bindings[state.active_account];
-      const label=node('label','rotation-session'),checkbox=node('input');checkbox.type='checkbox';checkbox.value=flow.id;
-      checkbox.checked=selectedFlows.has(flow.id);checkbox.disabled=!binding;
-      const text=node('span','',flow.label);text.append(node('small','',binding?`Account hiện tại · ${binding.thread_id}`:'Chưa liên kết thread trên account hiện tại'));
-      label.append(checkbox,text);workflows.append(label);
-    }
-    if(!(state.managed_threads||[]).length)workflows.append(node('p','','Chưa có luồng được quản lý. Chọn chat bên dưới để đăng ký.'));
-    const list=$('rotation-sessions');list.replaceChildren();let available=0;
-    for(const session of result.sessions){
-      if(known.has(session.id))continue;
-      available++;
-      const label=node('label','rotation-session'),checkbox=node('input');checkbox.type='checkbox';checkbox.value=session.id;checkbox.checked=selected.has(session.id);
-      const text=node('span','',session.title);text.append(node('small','',`${session.frontend} · ${session.cwd} · ${session.id}`));label.append(checkbox,text);list.append(label);
-    }
-    if(!available)list.append(node('p','','Không có chat local chưa đăng ký.'));
-    $('rotation-auto').checked=state.config.enabled;$('rotation-continue').checked=state.config.continue_work;
-    $('rotation-dialog-error').textContent='';$('rotation-dialog').showModal();
-  }catch(error){$('rotation-message').textContent=error.message;}
-});
-$('rotation-close').addEventListener('click',()=>$('rotation-dialog').close());
-$('rotation-save').addEventListener('click',async()=>{
-  const threads=[...$('rotation-sessions').querySelectorAll('input:checked')].map(el=>el.value);
-  const workflow_ids=[...$('rotation-workflows').querySelectorAll('input:checked')].map(el=>el.value);
-  try{
-    renderRotation(await accountAPI('/api/rotation/settings',{threads,workflow_ids,enabled:$('rotation-auto').checked,continue_work:$('rotation-continue').checked}));
-    $('rotation-dialog').close();
-  }catch(error){$('rotation-dialog-error').textContent=error.message;}
-});
-let confirmedRotationMode=null;
-async function confirmRotation(mode){
-  try{
-    const state=await accountAPI('/api/rotation');renderRotation(state);
-    if(state.busy)throw new Error('Đang có phiên chạy.');
-    const flows=(state.managed_threads||[]).filter(flow=>(state.config.workflow_ids||[]).includes(flow.id));
-    if(!flows.length)throw new Error('Chọn chat và lưu cấu hình trước khi chạy.');
-    if(flows.some(flow=>!flow.bindings[state.active_account]))throw new Error('Có workflow chưa có thread nguồn. Nạp handoff còn thiếu trong Luồng công việc được quản lý trước khi chạy.');
-    confirmedRotationMode=mode;
-    $('rotation-restart-desktop').checked=false;
-    $('rotation-confirm-title').textContent=mode==='rotate'?'Xác nhận compact, tạo handoff và chuyển account':'Xác nhận compact thật và tạo handoff mới';
-    const box=$('rotation-confirm-content');box.replaceChildren();
-    const name=state.accounts?.find(account=>account.id===state.active_account)?.name||state.active_account||'Chưa xác định';
-    box.append(node('p','',`Account nguồn: ${name}`));
-    if(mode==='rotate'){
-      const label=node('label','','Account đích '),select=node('select');select.id='rotation-target';
-      const automatic=node('option','','Tự chọn theo quota và thời điểm reset');automatic.value='';select.append(automatic);
-      for(const account of state.accounts||[]){
-        if(account.id===state.active_account)continue;
-        const option=node('option','',account.name||account.id);option.value=account.id;select.append(option);
-      }
-      label.append(select);box.append(label);
-      const destination=node('p','account-help');destination.id='rotation-target-description';
-      const describe=()=>{destination.textContent=select.value
-        ?`Chuyển đến ${select.selectedOptions[0].textContent}. Vẫn kiểm tra quota; nếu account bị disable, không đủ quota hoặc không xác minh được thì dừng, không tự đổi sang account khác.`
-        :'Relay tự chọn account đủ điều kiện theo chính sách quota/reset hiện tại.';};
-      select.addEventListener('change',describe);describe();box.append(destination);
-    }
 
-    const list=node('ul');
-    for(const flow of flows)list.append(node('li','',`${flow.label} · ${flow.bindings[state.active_account]?.thread_id||'Chưa có thread nguồn'} · ${flow.cwd}`));
-    box.append(list);
-    const steps=node('ol');
-    const descriptions=['Chờ client đóng; xác minh account và quota.','Sao lưu dữ liệu, compact từng thread và xuất handoff Markdown.'];
-    if(mode==='rotate')descriptions.push('Xác minh account đích đã chỉ định, hoặc tự chọn theo chính sách quota/reset; kiểm tra lại trước khi đổi.','Đổi đăng nhập, xác minh account đích; dùng lại thread liên kết hoặc tạo mới, đồng bộ alias và import toàn bộ context.',state.config.continue_work?'Sau import, Relay chạy tiếp một lượt: có thể sửa file trong project, tắt mạng.':'Sau import, mở client để tiếp tục thủ công.');
-    else descriptions.push('Kết thúc tại checkpoint; giữ nguyên account, không import hoặc chạy tiếp.');
-    for(const text of descriptions)steps.append(node('li','',text));box.append(steps);
-    $('rotation-confirm-dialog').showModal();
-  }catch(error){$('rotation-message').textContent=error.message;}
-}
-$('rotation-start').addEventListener('click',()=>confirmRotation('rotate'));
-$('rotation-checkpoint').addEventListener('click',()=>confirmRotation('checkpoint'));
-$('rotation-confirm-cancel').addEventListener('click',()=>{confirmedRotationMode=null;$('rotation-confirm-dialog').close();});
-$('rotation-confirm-run').addEventListener('click',()=>{
-  const mode=confirmedRotationMode;confirmedRotationMode=null;$('rotation-confirm-dialog').close();
-  if(mode)rotationAction('/api/rotation/start',{mode,target:mode==='rotate'?($('rotation-target')?.value||null):null,restart_desktop:$('rotation-restart-desktop').checked});
-});
-$('force-switch').addEventListener('click',async()=>{
-  try{
-    const state=await accountAPI('/api/rotation');renderRotation(state);
-    const select=$('force-switch-target');select.replaceChildren();
-    for(const account of state.accounts||[]){if(account.id===state.active_account)continue;const option=node('option','',account.name);option.value=account.id;select.append(option);}
-    if(!select.options.length)throw new Error('Chưa có account khác.');
-    if(state.busy)throw new Error('Đợi phiên hiện tại kết thúc.');
-    $('force-switch-error').textContent='';$('force-switch-dialog').showModal();
-  }catch(error){$('rotation-message').textContent=error.message;}
-});
-$('force-switch-cancel').addEventListener('click',()=>$('force-switch-dialog').close());
-$('force-switch-confirm').addEventListener('click',async()=>{
-  const button=$('force-switch-confirm');button.disabled=true;
-  try{
-    await accountAPI('/api/accounts/switch',{identity:$('force-switch-target').value});
-    $('force-switch-dialog').close();await request('/api/state');await pollRotation();
-  }catch(error){$('force-switch-error').textContent=error.message;}
-  finally{button.disabled=false;}
-});
-$('rotation-auto-toggle').addEventListener('change',()=>rotationAction('/api/rotation/automatic',{enabled:$('rotation-auto-toggle').checked}));
-$('rotation-cancel').addEventListener('click',()=>{if(confirm('Dừng phiên hiện tại và tắt tự động? Các bước đã hoàn tất và handoff được giữ; không hoàn tác sửa file project.'))rotationAction('/api/rotation/cancel');});
-$('rotation-recovery').addEventListener('click',()=>rotationAction('/api/rotation/recovery'));
-setInterval(pollRotation,3000);
-pollRotation();
-
-function renderManagedWorkflows(state){
-  const box=$('managed-workflows');
-  if(box.contains(document.activeElement)&&['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))return;
-  const opened=new Set([...box.querySelectorAll('details[open]')].map(el=>el.dataset.workflow));
-  box.replaceChildren();
-  box.append(node('h3','','Luồng công việc được quản lý'));
-  if(!(state.managed_threads||[]).length){box.append(node('p','account-help','Chọn chat và lưu cấu hình để tạo luồng có nhãn, theo dõi account–thread và lịch sử rotate.'));return;}
-  const accountName=id=>state.accounts?.find(a=>a.id===id)?.name||id||'Chưa chọn';
-  for(const flow of state.managed_threads){
-    const details=node('details','managed-workflow');details.dataset.workflow=flow.id;details.open=opened.has(flow.id)||((state.config.workflow_ids||[]).includes(flow.id)&&!flow.bindings[state.active_account]);
-    details.append(node('summary','',`${flow.label} · ${Object.keys(flow.bindings).length} account · ${flow.history.length} lần bàn giao gần nhất`));
-    details.append(node('p','account-help',`Workflow ID: ${flow.id} · ${flow.cwd}`));
-    for(const [account,binding] of Object.entries(flow.bindings)){
-      const line=node('p','binding-row',`${accountName(account)}${account===state.active_account?' · đang chọn':''} · ${binding.state==='ready'?'Sẵn sàng':'Chờ xác nhận import'}`);
-      const expectedName=`${flow.label} · ${accountName(account)}`;
-      line.append(node('small','',`Tên Codex: ${expectedName} · ${binding.name_status==='synced'&&binding.synced_name===expectedName?'Đã đồng bộ':binding.name_status==='error'?'Lỗi đồng bộ tên':'Chờ đồng bộ khi client đóng'}`));line.append(node('small','',`Account ID: ${account}`));line.append(node('code','',binding.thread_id));details.append(line);
+$('use-account-cancel').addEventListener('click', () => $('use-account-dialog').close());
+$('use-account-confirm').addEventListener('click', async () => {
+  if (!pendingUse || !canSwitchAccounts()) return;
+  const button = $('use-account-confirm');
+  button.disabled = true;
+  $('use-account-error').textContent = '';
+  try {
+    if (pendingUse.kind === 'antigravity') {
+      const relaunch = $('antigravity-relaunch') ? $('antigravity-relaunch').checked : true;
+      await accountAPI('/api/providers/antigravity/switch', {identity: pendingUse.id, relaunch});
+      await antigravityProfiles();
+    } else {
+      await accountAPI('/api/accounts/switch', {identity: pendingUse.id});
+      if (location.hash === '#login' || location.hash === '#codex-provider') await savedAccounts();
     }
-    if(!flow.bindings[state.active_account]){
-      const repair=node('button','button secondary','Nạp handoff còn thiếu');repair.disabled=state.busy||rotationBusy||['failed','recovery_required'].includes(state.job?.phase);
-      repair.addEventListener('click',()=>{
-        if(confirm(`Nạp handoff mới nhất đã lưu của “${flow.label}” vào ${accountName(state.active_account)}? Tạo thread và đồng bộ alias; không compact, đổi account hoặc chạy tiếp công việc.`))rotationAction('/api/rotation/start',{mode:'repair',workflow_id:flow.id});
-      });details.append(repair);
-    }
-    const editor=node('div','runner-actions'),label=node('input');label.value=flow.label;label.maxLength=80;label.setAttribute('aria-label',`Alias chung ${flow.label}`);
-    const rename=node('button','button secondary','Lưu alias chung');rename.disabled=state.busy;
-    rename.addEventListener('click',()=>rotationAction('/api/rotation/workflow',{workflow_id:flow.id,label:label.value}));editor.append(label,rename);details.append(editor);
-    const binder=node('div','runner-actions'),account=node('select');account.setAttribute('aria-label',`Account liên kết ${flow.label}`);
-    for(const item of state.accounts||[]){const option=node('option','',item.name+(flow.bindings[item.id]?' · đã liên kết':''));option.value=item.id;account.append(option);}
-    const thread=node('input');thread.placeholder='Thread ID local đã có';thread.setAttribute('aria-label',`Thread liên kết ${flow.label}`);
-    const bind=node('button','button secondary','Liên kết thread có sẵn');bind.disabled=state.busy;
-    bind.addEventListener('click',()=>rotationAction('/api/rotation/workflow',{workflow_id:flow.id,account_id:account.value,thread_id:thread.value.trim()}));binder.append(account,thread,bind);details.append(binder);
-    if(flow.history.length){
-      const history=node('ul','managed-history');
-      for(const event of [...flow.history].reverse().slice(0,10)){
-        const date=new Date(event.updated_at*1000).toLocaleString('vi-VN',{timeZone:'Asia/Tokyo'});
-        const item=node('li','',`${date} · ${accountName(event.from_account)} → ${accountName(event.to_account)} · ${event.to_thread?(event.reused?'dùng lại thread':'tạo thread'):'chưa nạp context'} · ${event.status}`);
-        history.append(item);
-      }details.append(history);
-    }
-    const sync=node('button','button secondary','Đồng bộ tên Codex');sync.disabled=state.busy;sync.addEventListener('click',()=>rotationAction('/api/rotation/names'));details.append(sync);
-    box.append(details);
+    $('use-account-dialog').close();
+    pendingUse = null;
+    await request('/api/state');
+  } catch (error) {
+    $('use-account-error').textContent = error.message;
+  } finally {
+    button.disabled = false;
   }
-}
+});
 
 function routePage(){
-  const login=location.hash==='#login';
+  const hash=location.hash||'#overview';
+  const antigravity=hash==='#antigravity-provider';
+  const codex=hash==='#codex-provider' || hash==='#login';
+  const login=codex || antigravity;
   $('dashboard-page').hidden=login;
   $('account-dialog').hidden=!login;
-  const active=login?'#login':location.hash||'#overview';
+  if($('codex-provider'))$('codex-provider').hidden=!codex;
+  if($('antigravity-provider'))$('antigravity-provider').hidden=!antigravity;
+  const child=antigravity?'#antigravity-provider':codex?'#codex-provider':hash;
   for(const link of document.querySelectorAll('.sidebar nav a')){
-    const selected=link.getAttribute('href')===active;
-    link.classList.toggle('selected',selected);
-    if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
+    const href=link.getAttribute('href');
+    const current=href===child;
+    link.classList.toggle('selected',current);
+    link.classList.toggle('open',href==='#login' && login);
+    if(current)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   }
-  document.querySelector('.breadcrumb').textContent=login?'Workspace / Quản lý đăng nhập':'Workspace / Tổng quan';
+  const group=document.querySelector('.nav-group');
+  if(group)group.classList.toggle('open',login);
+  document.querySelector('.breadcrumb').textContent=antigravity?'Workspace / Quản lý đăng nhập / Antigravity':codex?'Workspace / Quản lý đăng nhập / Codex':hash==='#accounts'?'Workspace / Tài khoản':'Workspace / Tổng quan';
+  if($('manage-title'))$('manage-title').textContent=antigravity?'Antigravity':codex?'Codex':'Quản lý đăng nhập';
+  if($('manage-eyebrow'))$('manage-eyebrow').textContent=antigravity?'GOOGLE · KEYCHAIN':codex?'CODEX · FILE AUTH':'LOCAL FILE AUTH';
   if(login){
-    if(!view?.account_management){$('account-message').textContent='Quản lý đăng nhập cần dashboard live.';return;}
-    if($('account-message').textContent==='Quản lý đăng nhập cần dashboard live.')$('account-message').textContent='';
-    savedAccounts().then(pollLogin).catch(error=>$('account-message').textContent=error.message);
+    if(antigravity)antigravityProfiles();
+    if(!view?.account_management){$('account-message').textContent='Quản lý đăng nhập cần dashboard live.';if(codex)return;}
+    if($('account-message') && $('account-message').textContent==='Quản lý đăng nhập cần dashboard live.')$('account-message').textContent='';
+    if(codex)savedAccounts().then(pollLogin).catch(error=>$('account-message').textContent=error.message);
   }
 }
 window.addEventListener('hashchange',routePage);
@@ -687,46 +584,100 @@ themeMedia.addEventListener('change',()=>{if(themeChoice==='system')applyTheme()
 applyTheme();
 
 
-let proxyBusy=false;
-async function pollProxy(){
-  if(!view?.live){$('proxy-status').textContent='Proxy chỉ khả dụng khi chạy server ở live mode.';return;}
-  if(proxyBusy)return;
-  try{
-    const state=await accountAPI('/api/proxy');
-    if(state.enabled){
-      for(const id of ['rotation-start','rotation-checkpoint','rotation-auto-toggle'])$(id).disabled=true;
+async function antigravityProfiles(path='/api/providers/antigravity',data) {
+  const status=$('antigravity-status'),capture=$('antigravity-capture'),restore=$('antigravity-restore');
+  if(window.RELAY_LOCAL){
+    status.textContent='Quản lý Antigravity cần dashboard server; bản HTML offline không đụng Keychain.';
+    capture.disabled=true;restore.disabled=true;return;
+  }
+  capture.disabled=true;restore.disabled=true;
+  try {
+    const result=await accountAPI(path,data);
+    if(result.changed){
+      status.textContent=result.relaunched
+        ? 'Đã ghi token vào Keychain và yêu cầu mở lại Antigravity IDE. Kiểm tra tài khoản hiển thị trong IDE.'
+        : (result.message || 'Đã ghi token vào Keychain. Mở lại Antigravity IDE và kiểm tra tài khoản.');
+    }else if(result.restored){
+      status.textContent='Đã khôi phục token Keychain trước lần chuyển bị gián đoạn. Mở lại IDE và kiểm tra tài khoản.';
+    }else if(!result.enabled){
+      status.textContent='Bật quản lý account ở dashboard server để lưu profile Antigravity.';
+    }else if(result.pending_recovery){
+      status.textContent='Có lần chuyển bị gián đoạn. Đóng IDE rồi bấm khôi phục trước khi đổi tiếp.';
+    }else if(result.live && result.live.readable){
+      status.textContent=`Keychain hiện tại: ${result.live.email || 'đã đăng nhập'}. Token đã lưu tương đương phiên đăng nhập sẵn.`;
+    }else{
+      status.textContent='Chưa đọc được token gemini/antigravity trong Keychain. Đăng nhập trong Antigravity IDE rồi bấm lưu phiên.';
     }
-    $('proxy-status').textContent=state.enabled?`Endpoint: ${state.endpoint} · ${state.sessions.length} thread · Key riêng tại ${state.key_file}`:'Proxy chưa bật. Khởi động server với --proxy-port 8767 để thử nghiệm.';
-    $('proxy-log').textContent=(state.events||[]).map(e=>`${new Date(e.time*1000).toLocaleString('vi-VN')} · ${e.kind} · ${e.alias} · ${e.account_name}${e.code?' · '+e.code:''}`).join('\n')||'Chưa có hoạt động proxy.';
-    const box=$('proxy-sessions');
-    if(box.contains(document.activeElement))return;
-    box.replaceChildren();
-    for(const session of state.sessions||[]){
-      const row=node('div','binding-row');
-      row.append(node('p','',`${session.alias} · ${session.account_name} · ${session.state} · lần chuyển ${session.generation}`));
-      row.append(node('code','',session.id));
-      if(session.quota)row.append(node('p','account-help',`Quota còn lại: ngắn hạn ${pct(100-session.quota.primary.used_percent)} · tuần ${pct(100-session.quota.secondary.used_percent)} · đọc lúc ${new Date(session.quota.checked_at*1000).toLocaleTimeString('vi-VN')}`));
-      const alias=node('input');alias.value=session.alias;alias.maxLength=80;alias.setAttribute('aria-label','Alias thread proxy');
-      const rename=node('button','button secondary','Lưu alias');rename.disabled=session.inflight;
-      rename.addEventListener('click',async()=>{try{await accountAPI('/api/proxy/alias',{session:session.id,alias:alias.value});await pollProxy();}catch(error){$('proxy-status').textContent=error.message;}});
-      row.append(alias,rename);
-
-      if(session.error)row.append(node('p','account-help',`Lỗi: ${session.error}. Không tự retry.`));
-      const select=node('select'),automatic=node('option','','Tự chọn account theo quota/reset');automatic.value='';select.append(automatic);
-      for(const account of state.accounts||[]){if(account.id===session.account)continue;const option=node('option','',account.name);option.value=account.id;select.append(option);}
-      row.append(select);
-      const button=node('button','button secondary','Tạo handoff & chuyển tuyến');
-      button.disabled=session.inflight||session.state==='uncertain';
-      button.addEventListener('click',async()=>{
-        if(!confirm(`Tạo handoff cho ${session.alias} bằng account ${session.account_name}, sau đó chuyển tuyến ${select.value?select.selectedOptions[0].textContent:'tự chọn'}? Dùng quota thật; bản tóm tắt có thể mất chi tiết. Không sửa auth.json, không tạo thread local mới. Chờ lượt agent kết thúc trước khi xác nhận.`))return;
-        proxyBusy=true;button.disabled=true;
-        try{await accountAPI('/api/proxy/checkpoint',{session:session.id,target:select.value||null});}
-        catch(error){$('proxy-status').textContent=error.message;}
-        finally{proxyBusy=false;await pollProxy();}
-      });row.append(button);box.append(row);
+    const list=$('antigravity-profiles');list.replaceChildren();
+    if(result.enabled && !(result.profiles||[]).length){
+      list.append(node('p','account-help','Chưa có snapshot nào. Đăng nhập một tài khoản trong Antigravity IDE, rồi bấm “Lưu phiên Keychain hiện tại”.'));
     }
-  }catch(error){$('proxy-status').textContent=error.message;}
+    for(const profile of result.profiles||[]){
+      const row=node('div','saved-account'),details=node('div','saved-details');
+      const header=node('div','gemini-header'),titleBox=node('div');
+      const quota=profile.quota||{};
+      const remain=window=>window?`${pct(100-window.used)} còn`:'—';
+      const groupLine=(Array.isArray(quota.groups)?quota.groups:[]).map(group => {
+        const parts=[];
+        if(group.short) parts.push(`5h ${remain(group.short)}`);
+        if(group.weekly) parts.push(`tuần ${remain(group.weekly)}`);
+        return parts.length ? `${group.name} ${parts.join(' / ')}` : '';
+      }).filter(Boolean).join(' · ');
+      const quotaLine=quota.status==='ok'
+        ? `${quota.plan || 'Antigravity'} · ${groupLine || `5 giờ ${remain(quota.short)} · tuần ${remain(quota.weekly)}`}`
+        : quota.status==='loading' ? 'Đang đọc quota 5 giờ và tuần'
+        : (quota.error || (profile.archived ? 'Đã lưu trữ · snapshot token vẫn được giữ' : profile.selected ? 'Đang là phiên Keychain hiện tại' : (profile.email || 'Snapshot đã lưu · chưa được chọn')));
+      titleBox.append(
+        node('strong','',profile.alias || profile.email || profile.name),
+        node('small','',quotaLine)
+      );
+      if(profile.selected)titleBox.append(node('span','chip mint','Keychain hiện tại'));
+      header.append(titleBox);details.append(header);
+      const editor=node('div','alias-editor'),alias=node('input');
+      alias.value=profile.alias || '';alias.maxLength=80;alias.setAttribute('aria-label','Tên profile Antigravity');
+      const save=node('button','button secondary','Lưu tên');
+      save.addEventListener('click',()=>antigravityProfiles('/api/providers/antigravity/update',{identity:profile.id,alias:alias.value}));
+      const archive=node('button','button secondary',profile.archived ? 'Khôi phục profile' : 'Lưu trữ profile');
+      archive.addEventListener('click',()=>antigravityProfiles('/api/providers/antigravity/update',{identity:profile.id,archived:!profile.archived}));
+      editor.append(alias,save,archive);details.append(editor);
+      const actions=node('div','account-actions');
+      const use=node('button','button primary',profile.selected ? 'Đang dùng' : 'Đổi sang tài khoản này');
+      use.disabled=profile.selected || profile.archived || result.pending_recovery;
+      use.addEventListener('click',()=>{
+        const relaunch=$('antigravity-relaunch').checked;
+        const confirmText=relaunch
+          ? `Đóng Antigravity IDE, ghi token của ${profile.alias || profile.email || 'profile này'} vào Keychain, rồi mở lại? Token đã lưu tương đương đăng nhập sẵn.`
+          : `Ghi token của ${profile.alias || profile.email || 'profile này'} vào Keychain? Hãy đóng Antigravity IDE trước. Token đã lưu tương đương đăng nhập sẵn.`;
+        if(!confirm(confirmText))return;
+        antigravityProfiles('/api/providers/antigravity/switch',{identity:profile.id,relaunch});
+      });
+      const remove=node('button','button secondary danger-outline','Gỡ snapshot');
+      remove.addEventListener('click',()=>{
+        if(!confirm('Xóa snapshot token trên máy? Không đăng xuất tài khoản Google và không đổi Keychain đang dùng.'))return;
+        antigravityProfiles('/api/providers/antigravity/remove',{identity:profile.id});
+      });
+      actions.append(use,remove);details.append(actions);
+      row.append(details);list.append(row);
+    }
+    if(path.endsWith('/capture'))$('antigravity-alias').value='';
+    capture.disabled=!result.enabled;
+    restore.disabled=!result.enabled || !result.pending_recovery;
+  } catch(error){
+    status.textContent=error.message;
+    capture.disabled=false;restore.disabled=false;
+  }
 }
-$('proxy-refresh').addEventListener('click',pollProxy);
-setInterval(pollProxy,5000);
-pollProxy();
+$('antigravity-quota-refresh').addEventListener('click', async () => {
+  if (window.RELAY_LOCAL || busy) return;
+  try {
+    await accountAPI('/api/providers/antigravity/quota', {});
+    await request('/api/state');
+  } catch (error) {
+    $('error').hidden = false;
+    $('error').textContent = error.message;
+  }
+});
+$('antigravity-capture').addEventListener('click',()=>antigravityProfiles('/api/providers/antigravity/capture',{alias:$('antigravity-alias').value}));
+$('antigravity-restore').addEventListener('click',()=>antigravityProfiles('/api/providers/antigravity/restore',{}));
+$('antigravity-refresh').addEventListener('click',()=>antigravityProfiles());
+antigravityProfiles();

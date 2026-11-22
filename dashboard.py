@@ -16,6 +16,8 @@ from onboarding import LoginFlow
 from rotation import RotationService, RotationError, ExecutionLease
 from quota_policy import priority, entry_ceiling, reset_wait
 from smart_proxy import SmartProxy,ProxyError
+from gemini_provider import GeminiProfiles
+from antigravity_provider import AntigravityProfiles
 
 STATIC = Path(__file__).parent / "ui"
 SECRET_FIELDS = {"access_token", "refresh_token", "id_token", "openai_api_key",
@@ -139,6 +141,8 @@ class Store:
         self.operation_lock = ExecutionLease(accounts.directory/'execution.lock') if accounts else threading.Lock()
         self.csrf = secrets.token_urlsafe(32)
         self.accounts = accounts
+        self.gemini = GeminiProfiles(accounts.directory/'gemini') if accounts else None
+        self.antigravity = AntigravityProfiles(accounts.directory/'antigravity') if accounts else None
         self.collector = collector
         self.demo = demo
         self.proxy = None
@@ -253,7 +257,9 @@ class Store:
                 active_row=next((r for r in row_map.values() if r.get('active')),None)
                 if active_row and active_row.get('polling'):
                     view['received_at']=active_row['polling']['last_checked_at']
-            return view
+            antigravity = self.antigravity
+        view['antigravity'] = antigravity.dashboard_summary() if antigravity else {'enabled': False, 'profiles': []}
+        return view
 
 
 def handler_for(store):
@@ -290,6 +296,20 @@ def handler_for(store):
                 self.respond(403, b'{"error":"forbidden"}')
                 return
             path = urlsplit(self.path).path
+            if path == '/api/providers/gemini':
+                try:
+                    result=store.gemini.status() if store.gemini else {'enabled':False,'profiles':[]}
+                    self.respond(200,json.dumps(result,ensure_ascii=False).encode())
+                except (AccountError,OSError):
+                    self.respond(409,b'{"error":"Cannot read Gemini profiles safely"}')
+                return
+            if path == '/api/providers/antigravity':
+                try:
+                    result=store.antigravity.status() if store.antigravity else {'enabled':False,'profiles':[]}
+                    self.respond(200,json.dumps(result,ensure_ascii=False).encode())
+                except (AccountError,OSError):
+                    self.respond(409,b'{"error":"Cannot read Antigravity profiles safely"}')
+                return
             if path in ('/api/rotation','/api/rotation/sessions','/api/rotation/handoff'):
                 if not store.rotation:
                     self.respond(409,b'{"error":"Live rotation is not available"}');return
@@ -345,6 +365,65 @@ def handler_for(store):
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict):
                     raise SnapshotError("Object required")
+                if self.path in ('/api/providers/gemini/create','/api/providers/gemini/update','/api/providers/gemini/login'):
+                    if not store.gemini:
+                        self.respond(409,b'{"error":"Gemini management requires live account mode"}');return
+                    try:
+                        if self.path.endswith('/create'):
+                            if set(data) != {'alias'}:raise AccountError('Only an alias is accepted')
+                            result=store.gemini.create(data['alias'])
+                        elif self.path.endswith('/login'):
+                            if 'identity' in data:
+                                if set(data) != {'identity'}:raise AccountError('Only identity is accepted')
+                                result=store.gemini.open_login_terminal(data['identity'])
+                            else:
+                                if set(data)-{'alias'}:raise AccountError('Only optional alias is accepted')
+                                result=store.gemini.start_login(data.get('alias'))
+                        else:
+                            if 'identity' not in data or set(data)-{'identity','alias','archived'}:
+                                raise AccountError('Only profile metadata is accepted')
+                            result=store.gemini.update(data['identity'],data.get('alias'),data.get('archived'))
+                        self.respond(200,json.dumps(result,ensure_ascii=False).encode())
+                    except AccountError as error:
+                        self.respond(409,json.dumps({'error':str(error)},ensure_ascii=False).encode())
+                    except OSError:
+                        self.respond(409,b'{"error":"Cannot update Gemini profile; check alias and local permissions"}')
+                    return
+                if self.path in ('/api/providers/antigravity/capture','/api/providers/antigravity/update',
+                                 '/api/providers/antigravity/switch','/api/providers/antigravity/remove',
+                                 '/api/providers/antigravity/restore','/api/providers/antigravity/quota'):
+                    if not store.antigravity:
+                        self.respond(409,b'{"error":"Antigravity management requires live account mode"}');return
+                    try:
+                        if self.path.endswith('/capture'):
+                            if set(data)-{'alias'}:raise AccountError('Only optional alias is accepted')
+                            result=store.antigravity.capture(data.get('alias'))
+                        elif self.path.endswith('/switch'):
+                            if 'identity' not in data or set(data)-{'identity','relaunch'}:
+                                raise AccountError('Only identity and optional relaunch are accepted')
+                            if 'relaunch' in data and type(data['relaunch']) is not bool:
+                                raise AccountError('relaunch must be a boolean')
+                            result=store.antigravity.switch(data['identity'], relaunch=bool(data.get('relaunch', False)))
+                        elif self.path.endswith('/remove'):
+                            if set(data)!={'identity'}:raise AccountError('Only identity is accepted')
+                            result=store.antigravity.remove(data['identity'])
+                        elif self.path.endswith('/restore'):
+                            if data:raise AccountError('Restore does not accept fields')
+                            result=store.antigravity.restore()
+                        elif self.path.endswith('/quota'):
+                            if set(data)-{'identity'}:
+                                raise AccountError('Only optional identity is accepted')
+                            result=store.antigravity.refresh_quota(data.get('identity'), wait=True)
+                        else:
+                            if 'identity' not in data or set(data)-{'identity','alias','archived'}:
+                                raise AccountError('Only profile metadata is accepted')
+                            result=store.antigravity.update(data['identity'],data.get('alias'),data.get('archived'))
+                        self.respond(200,json.dumps(result,ensure_ascii=False).encode())
+                    except AccountError as error:
+                        self.respond(409,json.dumps({'error':str(error)},ensure_ascii=False).encode())
+                    except OSError:
+                        self.respond(409,b'{"error":"Cannot update Antigravity profile; check alias and local permissions"}')
+                    return
                 if self.path == '/api/quota/reset':
                     if not store.collector or not store.accounts:
                         self.respond(409,b'{"error":"Live quota required"}');return

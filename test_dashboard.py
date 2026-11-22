@@ -114,11 +114,109 @@ class HttpTests(unittest.TestCase):
         self.assertIn(b'Codex Relay', body)
         self.assertIn("frame-ancestors 'none'", headers)
         self.assertTrue(json.loads(self.http('/api/state')[2])['demo'])
+        self.assertEqual(json.loads(self.http('/api/state')[2])['antigravity'], {'enabled': False, 'profiles': []})
+        self.assertIn(b'antigravity-accounts-body', body)
+        self.assertIn(b'use-account-dialog', body)
+        self.assertIn(b'codex-provider', body)
+        self.assertIn(b'nav-sub', body)
+        self.assertNotIn(b'href="#connection"', body)
+        self.assertNotIn(b'>TB<', body)
+        self.assertNotIn(b'gmail.com', body)
+        self.assertNotIn(b'gemini-provider', body)
+        self.assertNotIn(b'rotation-start', body)
+        self.assertNotIn('Chiến lược rotate'.encode(), body)
 
     def test_proxy_disabled_by_default_and_controls_require_csrf(self):
         self.assertEqual(json.loads(self.http('/api/proxy')[2]),{'enabled':False})
         self.assertEqual(self.http('/api/proxy/checkpoint','POST',{'session':'x'},authorized=False)[0],403)
         self.assertEqual(self.http('/api/proxy/checkpoint','POST',{'session':'x'})[0],409)
+
+    def test_gemini_profiles_metadata_routes_and_csrf(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import Mock, patch
+        from gemini_provider import GeminiProfiles
+        self.assertFalse(json.loads(self.http('/api/providers/gemini')[2])['enabled'])
+        with tempfile.TemporaryDirectory() as temporary:
+            self.store.gemini=GeminiProfiles(Path(temporary).resolve()/'gemini')
+            with patch('gemini_provider.sys.platform', 'darwin'), \
+                 patch('gemini_provider.shutil.which', return_value='/opt/homebrew/bin/gemini'), \
+                 patch('gemini_provider.subprocess.run', return_value=Mock(returncode=0)) as run:
+                path='/api/providers/gemini/create'
+                self.assertEqual(self.http(path,'POST',{'alias':'Google'},authorized=False)[0],403)
+                self.assertEqual(self.http(path,'POST',{'alias':'Google','refresh_token':'rejected'})[0],409)
+                status,_,body=self.http(path,'POST',{'alias':'Google'})
+                self.assertEqual(status,200)
+                profile=json.loads(body)['profiles'][0]
+                update='/api/providers/gemini/update'
+                self.assertEqual(self.http(update,'POST',{'identity':profile['id'],'alias':'Work'})[0],200)
+                self.assertEqual(self.http(update,'POST',{'identity':'../escape','alias':'Bad'})[0],409)
+                status,_,body=self.http('/api/providers/gemini')
+                self.assertEqual(status,200)
+                self.assertEqual(json.loads(body)['profiles'][0]['alias'],'Work')
+                run.assert_not_called()
+                login='/api/providers/gemini/login'
+                self.assertEqual(self.http(login,'POST',{'identity':profile['id']},authorized=False)[0],403)
+                self.assertEqual(self.http(login,'POST',{'identity':profile['id'],'tokens':'rejected'})[0],409)
+                status,_,body=self.http(login,'POST',{'identity':profile['id']})
+                self.assertEqual(status,200)
+                self.assertTrue(json.loads(body)['launched'])
+                status,_,body=self.http(login,'POST',{'alias':''})
+                self.assertEqual(status,200)
+                created=json.loads(body)
+                self.assertTrue(created['created'])
+                self.assertEqual(created['profiles'][1]['alias'],'Gemini 2')
+                self.assertEqual(run.call_count,2)
+
+    def test_antigravity_keychain_routes_and_csrf(self):
+        import tempfile
+        from pathlib import Path
+        from antigravity_provider import AntigravityProfiles, MemoryLiveStore
+        from test_antigravity_provider import token, FakeDesktop, MemoryQuota
+        self.assertFalse(json.loads(self.http('/api/providers/antigravity')[2])['enabled'])
+        with tempfile.TemporaryDirectory() as temporary:
+            live=MemoryLiveStore(token('work'))
+            desktop=FakeDesktop()
+            self.store.antigravity=AntigravityProfiles(Path(temporary).resolve()/'antigravity', live=live, desktop=desktop, quota=MemoryQuota())
+            capture='/api/providers/antigravity/capture'
+            self.assertEqual(self.http(capture,'POST',{'alias':'Work'},authorized=False)[0],403)
+            self.assertEqual(self.http(capture,'POST',{'alias':'Work','refresh_token':'rejected'})[0],409)
+            status,_,body=self.http(capture,'POST',{'alias':'Work'})
+            self.assertEqual(status,200)
+            payload=json.loads(body)
+            self.assertNotIn('refresh-work', body.decode())
+            profile=payload['profiles'][0]
+            self.assertEqual(profile['alias'],'Work')
+            live.blob=token('home')
+            self.assertEqual(self.http(capture,'POST',{'alias':'Home'})[0],200)
+            home=json.loads(self.http('/api/providers/antigravity')[2])['profiles']
+            home_id=next(p['id'] for p in home if p['alias']=='Home')
+            live.blob=token('work')
+            switch='/api/providers/antigravity/switch'
+            self.assertEqual(self.http(switch,'POST',{'identity':home_id,'relaunch':True},authorized=False)[0],403)
+            status,_,body=self.http(switch,'POST',{'identity':home_id,'relaunch':True})
+            self.assertEqual(status,200)
+            self.assertTrue(json.loads(body)['changed'])
+            self.assertNotIn('refresh-home', body.decode())
+            state=json.loads(self.http('/api/state')[2])
+            self.assertTrue(state['antigravity']['enabled'])
+            aliases={p['alias'] for p in state['antigravity']['profiles']}
+            self.assertEqual(aliases, {'Work', 'Home'})
+            self.assertTrue(any(p['selected'] and p['alias']=='Home' for p in state['antigravity']['profiles']))
+            encoded=json.dumps(state)
+            self.assertNotIn('refresh-home', encoded)
+            self.assertNotIn('refresh-work', encoded)
+            self.assertNotIn('access-home', encoded)
+            home_row=next(p for p in state['antigravity']['profiles'] if p['alias']=='Home')
+            self.assertEqual(home_row['quota']['plan'], 'Pro')
+            self.assertEqual(home_row['quota']['short']['used'], 25)
+            quota='/api/providers/antigravity/quota'
+            self.assertEqual(self.http(quota,'POST',{},authorized=False)[0],403)
+            self.assertEqual(self.http(quota,'POST',{'identity':home_id,'token':'rejected'})[0],409)
+            status,_,body=self.http(quota,'POST',{'identity':home_id})
+            self.assertEqual(status,200)
+            self.assertNotIn('refresh-home', body.decode())
+            self.assertEqual(json.loads(body)['profiles'][0]['quota']['weekly']['used'], 40)
 
     def test_proxy_dashboard_controls_and_cold_rotation_exclusion(self):
         from unittest.mock import Mock
