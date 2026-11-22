@@ -117,6 +117,7 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(json.loads(self.http('/api/state')[2])['antigravity'], {'enabled': False, 'profiles': []})
         self.assertIn(b'antigravity-accounts-body', body)
         self.assertIn(b'use-account-dialog', body)
+        self.assertIn(b'codex-force-auth', body)
         self.assertIn(b'codex-provider', body)
         self.assertIn(b'nav-sub', body)
         self.assertNotIn(b'href="#connection"', body)
@@ -276,7 +277,7 @@ class ManagedAccountHttpTests(HttpTests):
         home=root/'home';home.mkdir()
         (home/'auth.json').write_bytes(auth('current'))
         (home/'config.toml').write_text('cli_auth_credentials_store="file"')
-        self.store.accounts=Accounts(root/'vault',home,guard=lambda:None)
+        self.store.accounts=Accounts(root/'vault',home,guard=lambda:None,killer=lambda: [])
 
     def test_account_management_is_opt_in(self):
         # Explicitly enabled; invalid identity must be rejected rather than guessed.
@@ -294,6 +295,38 @@ class ManagedAccountHttpTests(HttpTests):
 
     def test_account_mutation_requires_csrf(self):
         self.assertEqual(self.http('/api/accounts/capture','POST',{'name':'Current'},authorized=False)[0],403)
+
+    def test_force_switch_skips_process_guard(self):
+        from accounts import AccountError, identify
+        from test_accounts import auth
+        blocked = []
+        def guard():
+            blocked.append(True)
+            raise AccountError('client running')
+        self.store.accounts.guard = guard
+        captured = json.loads(self.http('/api/accounts/capture','POST',{'name':'Current'})[2])
+        other = auth('other')
+        source = self.temp.name
+        from pathlib import Path
+        extra = Path(source)/'other.json'
+        extra.write_bytes(other)
+        other_id = self.store.accounts.capture('Other', extra)['id']
+        blocked.clear()
+        status, _, body = self.http('/api/accounts/switch','POST',{'identity':other_id})
+        self.assertEqual(status, 409)
+        self.assertTrue(blocked)
+        blocked.clear()
+        killed = []
+        self.store.accounts.killer = lambda: killed.append({'pid': 42, 'name': 'codex'}) or killed
+        status, _, body = self.http('/api/accounts/switch','POST',{'identity':other_id,'force':True})
+        self.assertEqual(status, 200)
+        result = json.loads(body)
+        self.assertTrue(result['changed'])
+        self.assertTrue(result['forced'])
+        self.assertFalse(blocked)
+        self.assertEqual(result['killed'], 1)
+        self.assertEqual(identify(self.store.accounts.home.joinpath('auth.json').read_bytes())['id'], other_id)
+        self.assertFalse(captured['id'] == other_id)
 
     def test_alias_crud_and_email_fallback(self):
         self.assertEqual(self.http('/api/accounts/capture','POST',{})[0],200)

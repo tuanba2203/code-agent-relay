@@ -160,6 +160,7 @@ Khi lỗi, Relay giữ handoff/journal, không tự replay. Engine hiện có th
 - Thiếu binding: dùng **Nạp handoff còn thiếu** để nhập bản đã lưu thay vì compact lại.
 - **Xác nhận sau phục hồi** kiểm tra trạng thái local và gỡ rào cản job cũ, không chạy lại handoff. Nút bị khóa khi client còn chạy hoặc worker chưa dừng.
 - **Force switch account** đổi đăng nhập trực tiếp, không compact/chuyển context, bỏ qua chọn đích theo quota; vẫn cần đóng client.
+- **Dùng account này** (Codex) có tùy chọn force: SIGKILL các process tên `codex` (CLI, Codex.app, app-server), giữ VS Code, rồi ghi `auth.json`. Rotation/compact vẫn bắt đóng client.
 
 ## Công nghệ và cấu trúc
 

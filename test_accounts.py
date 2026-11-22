@@ -25,7 +25,7 @@ class AccountTests(unittest.TestCase):
         (self.home/'config.toml').write_text('cli_auth_credentials_store = "file"\n')
         self.old, self.new = auth('old'), auth('new')
         (self.home/'auth.json').write_bytes(self.old)
-        self.store = Accounts(self.root/'vault', self.home, guard=lambda:None)
+        self.store = Accounts(self.root/'vault', self.home, guard=lambda:None, killer=lambda: [])
         source = self.root/'new-auth.json'; source.write_bytes(self.new)
         self.target = self.store.capture('Work',source)['id']
         self.env = patch.dict(os.environ, {'CODEX_ACCESS_TOKEN':'','OPENAI_API_KEY':'','CODEX_API_KEY':''})
@@ -46,6 +46,69 @@ class AccountTests(unittest.TestCase):
         with self.assertRaises(AccountError): self.store.switch(self.target)
         self.assertEqual((self.home/'auth.json').read_bytes(),self.old)
         self.assertFalse(self.store.journal.exists())
+
+    def test_force_switch_overwrites_auth_while_guard_would_block(self):
+        def blocked(): raise AccountError('client running')
+        self.store.guard = blocked
+        with self.assertRaises(AccountError): self.store.switch(self.target, force=False)
+        result = self.store.switch(self.target, force=True)
+        self.assertTrue(result['changed'])
+        self.assertTrue(result['forced'])
+        self.assertFalse(result['restart_required'])
+        self.assertEqual((self.home/'auth.json').read_bytes(), self.new)
+        self.assertFalse(self.store.journal.exists())
+        with self.assertRaises(AccountError): self.store.switch(self.target, force='yes')
+
+    def test_force_switch_kills_codex_named_before_writing_auth(self):
+        order = []
+        def killer():
+            order.append('kill')
+            self.assertEqual((self.home/'auth.json').read_bytes(), self.old)
+            return [{'pid': 11, 'name': 'codex'}, {'pid': 12, 'name': 'Codex'}]
+        self.store.guard = lambda: (_ for _ in ()).throw(AccountError('client running'))
+        self.store.killer = killer
+        result = self.store.switch(self.target, force=True)
+        self.assertEqual(order, ['kill'])
+        self.assertEqual(result['killed'], 2)
+        self.assertEqual(result['killed_names'], ['codex', 'Codex'])
+        self.assertEqual((self.home/'auth.json').read_bytes(), self.new)
+
+    def test_normal_switch_does_not_kill(self):
+        self.store.killer = lambda: (_ for _ in ()).throw(AssertionError('should not kill'))
+        self.store.switch(self.target)
+        self.assertEqual((self.home/'auth.json').read_bytes(), self.new)
+
+    def test_codex_named_matches_codex_binaries_only(self):
+        self.assertTrue(accounts.codex_named('/usr/local/bin/codex'))
+        self.assertTrue(accounts.codex_named('/Applications/Codex.app/Contents/MacOS/Codex'))
+        self.assertTrue(accounts.codex_named('codext'))
+        self.assertTrue(accounts.codex_named('/tmp/codex-cli'))
+        self.assertFalse(accounts.codex_named('/Applications/Visual Studio Code.app/Contents/MacOS/Electron'))
+        self.assertFalse(accounts.codex_named('/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/Contents/MacOS/Code Helper'))
+        self.assertFalse(accounts.codex_named('/Applications/ChatGPT.app/Contents/MacOS/ChatGPT'))
+        self.assertFalse(accounts.codex_named('/usr/bin/python3'))
+
+    def test_force_kill_sends_sigkill_to_codex_named_only(self):
+        listing = (
+            '  11 /usr/local/bin/codex\n'
+            '  12 /Applications/Codex.app/Contents/MacOS/Codex\n'
+            '  13 /Applications/Visual Studio Code.app/Contents/MacOS/Electron\n'
+            '  14 /Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/Contents/MacOS/Code Helper\n'
+            '  15 /usr/bin/python3\n'
+            '  16 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT\n'
+            '  17 /opt/codext\n'
+        )
+        sent = []
+        def fake_run(*args, **kwargs):
+            stdout = listing if not sent else ''
+            return type('Result', (), {'stdout': stdout})()
+        with patch('subprocess.run', side_effect=fake_run), \
+             patch('os.kill', side_effect=lambda pid, sig: sent.append((pid, sig))), \
+             patch('os.getpid', return_value=1):
+            killed = accounts.force_kill_codex_named(timeout=1)
+        self.assertEqual({row['pid'] for row in killed}, {11, 12, 17})
+        self.assertEqual({pid for pid, sig in sent}, {11, 12, 17})
+        self.assertTrue(all(sig == 9 for _, sig in sent))
 
     def test_keyring_or_implicit_mode_rejected(self):
         for config in ('cli_auth_credentials_store="keyring"','', '[profile]\ncli_auth_credentials_store="file"'):

@@ -494,7 +494,7 @@ def handler_for(store):
                         elif self.path.endswith('/capture'):
                             result = store.accounts.capture(data.get('name'))
                         elif self.path.endswith('/switch'):
-                            result = store.accounts.switch(data.get('identity'))
+                            result = store.accounts.switch(data.get('identity'), force=data.get('force') is True)
                         else:
                             result = store.accounts.restore()
                         if not self.path.endswith('/export'):

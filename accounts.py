@@ -1,4 +1,4 @@
-"""Local file-auth profile manager. Never restarts or controls running clients."""
+"""Local file-auth profile manager. Force switch may SIGKILL processes named codex."""
 import argparse
 import base64
 from contextlib import contextmanager
@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import tempfile
@@ -145,11 +146,62 @@ def clients_stopped():
         raise AccountError('Client còn chạy: '+ '; '.join(dict.fromkeys(blockers))[:1500])
 
 
+def codex_named(command):
+    name = Path(command.strip()).name.lower()
+    return name in ('codex', 'codext') or name.startswith('codex-') or name.startswith('codex ') or 'codex helper' in name
+
+
+def list_codex_named_processes():
+    """Return processes whose executable name is Codex. No argv or credentials."""
+    try:
+        output = subprocess.run(['/bin/ps', '-axo', 'pid=,comm='], capture_output=True,
+                                text=True, timeout=5, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        raise AccountError('Cannot list Codex processes; force switch blocked') from None
+    self_pid = os.getpid()
+    rows = []
+    for line in output.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) != 2 or not parts[0].isdigit():
+            continue
+        pid = int(parts[0])
+        if pid <= 1 or pid == self_pid:
+            continue
+        command = parts[1].strip()
+        if not codex_named(command):
+            continue
+        rows.append({'pid': pid, 'name': Path(command).name, 'comm': command})
+    return rows
+
+
+def force_kill_codex_named(timeout=5):
+    """SIGKILL executables named codex. Leaves VS Code / ChatGPT running."""
+    killed = {}
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining = list_codex_named_processes()
+        if not remaining:
+            return [{'pid': pid, 'name': name} for pid, name in killed.items()]
+        for row in remaining:
+            try:
+                os.kill(row['pid'], signal.SIGKILL)
+                killed[row['pid']] = row['name']
+            except ProcessLookupError:
+                continue
+            except PermissionError:
+                raise AccountError('Không gửi được SIGKILL tới process Codex pid %d (%s)' % (row['pid'], row['name'])) from None
+        if time.monotonic() >= deadline:
+            leftover = '; '.join('%s pid %d' % (row['name'], row['pid']) for row in list_codex_named_processes())
+            raise AccountError('Process Codex vẫn chạy sau SIGKILL: ' + leftover[:1500])
+        time.sleep(0.05)
+
+
 class Accounts:
-    def __init__(self, directory, codex_home, guard=clients_stopped):
+    def __init__(self, directory, codex_home, guard=clients_stopped, killer=force_kill_codex_named):
         self.directory = Path(directory).absolute()
         self.home = Path(codex_home).absolute()
         self.guard = guard
+        self.killer = killer
         for path in (self.directory, self.home):
             if path.is_symlink() or any(p.is_symlink() for p in path.parents):
                 # macOS /tmp alias should be resolved by callers before use.
@@ -321,13 +373,16 @@ class Accounts:
                     'pending_recovery':self.journal.exists(), 'mode':'restart_required',
                     'scope':'shared file auth only; running frontend identity not verified'}
 
-    def switch(self, key):
+    def switch(self, key, force=False):
         if not isinstance(key, str) or not re.fullmatch('[0-9a-f]{64}', key):
             raise AccountError('Unknown profile identity')
+        if force not in (True, False):
+            raise AccountError('Invalid force option')
         with self.lock():
             if self.journal.exists():
                 raise AccountError('A prior switch needs recovery; run accounts.py restore')
-            self.guard()
+            if not force:
+                self.guard()
             if any(os.environ.get(k) for k in ('CODEX_ACCESS_TOKEN', 'OPENAI_API_KEY', 'CODEX_API_KEY')):
                 raise AccountError('Unset token/API-key authentication environment variables before file-auth switching')
             self.file_mode()
@@ -341,7 +396,7 @@ class Accounts:
             old = read_private(live)  # Fail closed; require an existing login to back up.
             old_info = identify(old)
             if old_info['id'] == key:
-                return {'changed':False, 'restart_required':True}
+                return {'changed':False, 'restart_required':not force, 'forced':force}
             # Preserve token refreshes from the outgoing account before switching.
             old_info.update(alias=profile_alias(registry.get(old_info['id'],{})),saved_at=time.time())
             old_info['name']=display_name(old_info,old_info['id'])
@@ -353,21 +408,36 @@ class Accounts:
             backup = 'backup-'+uuid.uuid4().hex+'.auth.json'
             atomic(self.directory/backup, old)
             atomic(self.journal, {'backup':backup, 'before':old_info['id'], 'target':key,
-                                  'target_digest':hashlib.sha256(target).hexdigest()})
+                                  'target_digest':hashlib.sha256(target).hexdigest(), 'forced':force})
+            killed_rows = []
             try:
-                self.guard()
-                if read_private(live) != old:
-                    raise AccountError('Auth changed during switch; retry after closing all clients')
+                if force:
+                    killed_rows = list(self.killer() or [])
+                else:
+                    self.guard()
+                    if read_private(live) != old:
+                        raise AccountError('Auth changed during switch; retry after closing all clients')
                 atomic(live, target)
                 if read_private(live) != target:
                     raise AccountError('Auth replacement verification failed')
                 atomic(self.directory/'last-switch.json', {'before':old_info['id'], 'target':key,
-                                                          'backup':backup, 'at':time.time()})
+                                                          'backup':backup, 'at':time.time(), 'forced':force})
                 self.journal.unlink()
+            except AccountError:
+                raise
             except Exception:
                 # Keep journal; do not overwrite an independently changed login.
                 raise AccountError('Switch stopped; backup retained. Run accounts.py restore before retrying') from None
-            return {'changed':True, 'restart_required':True, 'selected_profile':key,
+            names = []
+            for row in killed_rows:
+                name = row.get('name') if isinstance(row, dict) else None
+                if isinstance(name, str) and name and name not in names:
+                    names.append(name)
+            if force:
+                return {'changed':True, 'restart_required':False, 'forced':True, 'selected_profile':key,
+                        'killed':len(killed_rows), 'killed_names':names,
+                        'message':'SIGKILL sent to Codex-named processes, then auth.json replaced. VS Code was left running; the extension may respawn Codex with the new login.'}
+            return {'changed':True, 'restart_required':True, 'forced':False, 'selected_profile':key,
                     'message':'Auth file replaced. Reopen both clients; verify their displayed account.'}
 
     def restore(self):
@@ -398,7 +468,7 @@ def main():
     update=sub.add_parser('alias');update.add_argument('identity');update.add_argument('--name',default='')
     remove=sub.add_parser('remove');remove.add_argument('identity')
     sub.add_parser('list')
-    switch = sub.add_parser('switch'); switch.add_argument('identity')
+    switch = sub.add_parser('switch'); switch.add_argument('identity'); switch.add_argument('--force', action='store_true', help='SIGKILL processes named codex, then overwrite auth.json')
     sub.add_parser('restore')
     args = parser.parse_args()
     manager = Accounts(args.directory.resolve(), args.codex_home.resolve())
@@ -418,7 +488,7 @@ def main():
             result = manager.capture(args.name, login_home/'auth.json')
     elif args.command == 'capture': result = manager.capture(args.name)
     elif args.command == 'list': result = manager.list()
-    elif args.command == 'switch': result = manager.switch(args.identity)
+    elif args.command == 'switch': result = manager.switch(args.identity, force=args.force)
     elif args.command == 'alias': result = manager.update(args.identity,args.name)
     elif args.command == 'remove': result = manager.remove(args.identity)
     else: result = manager.restore()

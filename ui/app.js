@@ -41,7 +41,8 @@ function askUseAccount(kind, id, name) {
   $('use-account-title').textContent = 'Dùng account này';
   $('use-account-message').textContent = kind === 'antigravity'
     ? `Đóng Antigravity IDE, ghi token của ${name} vào Keychain, rồi mở lại? Token đã lưu tương đương đăng nhập sẵn.`
-    : `Đổi đăng nhập Codex sang ${name}? Đóng Codex desktop, VS Code và CLI trước. Không chuyển context.`;
+    : `Đổi đăng nhập Codex sang ${name}? Bật force kill sẽ SIGKILL process tên codex, giữ VS Code, rồi ghi auth.json. Không chuyển context.`;
+  if ($('codex-force-wrap')) $('codex-force-wrap').hidden = kind !== 'codex';
   $('use-account-error').textContent = '';
   $('use-account-dialog').showModal();
 }
@@ -384,7 +385,7 @@ async function savedAccounts() {
     const actions=node('div','account-actions');
     const button = node('button','button secondary',profile.selected_on_disk ? 'Đã chọn trên đĩa' : 'Sử dụng tài khoản');
     button.disabled = profile.selected_on_disk || result.pending_recovery;
-    button.addEventListener('click', () => accountOperation('/api/accounts/switch',{identity:profile.id}));
+    button.addEventListener('click', () => askUseAccount('codex', profile.id, profile.display_name || profile.name));
     const remove=node('button','button danger-outline','Gỡ profile');
     remove.disabled=!!result.pending_recovery;
     remove.addEventListener('click',()=>{
@@ -405,7 +406,7 @@ async function accountOperation(path, data) {
   for (const [button] of buttons) button.disabled = true;
   try {
     const result = await accountAPI(path,data);
-    $('account-message').textContent = result.removed ? 'Đã gỡ profile khỏi Relay; đăng nhập local không thay đổi.' : path.endsWith('/update') ? 'Đã lưu alias.' : result.restart_required ? 'Đã cập nhật file đăng nhập. Mở lại hai client và kiểm tra account hiển thị. Quota đang được đọc lại cho các profile thật.' : 'Đã lưu profile. Chưa đổi đăng nhập.';
+    $('account-message').textContent = result.removed ? 'Đã gỡ profile khỏi Relay; đăng nhập local không thay đổi.' : path.endsWith('/update') ? 'Đã lưu alias.' : result.forced ? `Đã SIGKILL ${result.killed || 0} process Codex rồi ghi auth.json. VS Code vẫn chạy; kiểm tra extension có nhận account mới không.` : result.restart_required ? 'Đã cập nhật file đăng nhập. Mở lại hai client và kiểm tra account hiển thị. Quota đang được đọc lại cho các profile thật.' : 'Đã lưu profile. Chưa đổi đăng nhập.';
     await savedAccounts();
     await request('/api/state');
   } catch(error) { $('account-message').textContent = error.message; }
@@ -522,7 +523,8 @@ $('use-account-confirm').addEventListener('click', async () => {
       await accountAPI('/api/providers/antigravity/switch', {identity: pendingUse.id, relaunch});
       await antigravityProfiles();
     } else {
-      await accountAPI('/api/accounts/switch', {identity: pendingUse.id});
+      const force = $('codex-force-auth') ? $('codex-force-auth').checked : false;
+      await accountAPI('/api/accounts/switch', {identity: pendingUse.id, force});
       if (location.hash === '#login' || location.hash === '#codex-provider') await savedAccounts();
     }
     $('use-account-dialog').close();
