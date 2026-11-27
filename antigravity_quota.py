@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import ssl
 import threading
@@ -149,7 +150,7 @@ def remaining_percent(fraction):
 
 def bucket_window(window, bucket_id):
     label = (window or '').strip().lower()
-    if label in ('5h', '5-hour', 'five_hour', 'five-hour'):
+    if label in ('5h', '5-hour', 'five_hour', 'five-hour', 'five hour'):
         return '5h'
     if label in ('weekly', 'week'):
         return 'weekly'
@@ -159,6 +160,99 @@ def bucket_window(window, bucket_id):
     if '5h' in ident or 'five' in ident:
         return '5h'
     return ''
+
+
+GENERIC_BUCKET_LABELS = {
+    'weekly limit remaining',
+    'five hour limit remaining',
+    '5 hour limit remaining',
+}
+MODEL_VARIANT_SUFFIX = re.compile(r'-(?:low|medium|high|xhigh|sonar|tiered(?:-.*)?)$', re.I)
+THINKING_DISPLAY = re.compile(r'\s*\((?:Low|Medium|High|XHigh|Sonar)\)\s*$', re.I)
+
+
+def window_label(kind, display_name=None):
+    if isinstance(display_name, str) and display_name.strip() and display_name.strip().lower() not in GENERIC_BUCKET_LABELS:
+        return display_name.strip()
+    if kind == '5h':
+        return '5 giờ'
+    if kind == 'weekly':
+        return 'tuần'
+    return kind or 'quota'
+
+
+def window_kind(info, bucket_id=None, now=None):
+    kind = bucket_window(info.get('window') if isinstance(info, dict) else None, bucket_id)
+    if kind:
+        return kind
+    reset = unix_time(info.get('resetTime') if isinstance(info, dict) else None)
+    if reset is not None:
+        delta = reset - (time.time() if now is None else now)
+        if 0 < delta <= 6 * 3600:
+            return '5h'
+        if delta > 6 * 3600:
+            return 'weekly'
+    label = ''
+    if isinstance(info, dict) and isinstance(info.get('window'), str):
+        label = info['window'].strip()
+    if not label and isinstance(bucket_id, str):
+        label = bucket_id.strip()
+    return label or 'quota'
+
+
+def parse_window(info, group_name, bucket_id=None, now=None):
+    if not isinstance(info, dict):
+        return None
+    remaining = remaining_percent(info.get('remainingFraction'))
+    if remaining is None:
+        return None
+    disabled = info.get('disabled') is True
+    if disabled:
+        remaining = 0
+    kind = window_kind(info, bucket_id, now=now)
+    return {
+        'kind': kind,
+        'remaining': remaining,
+        'resets_at': unix_time(info.get('resetTime')),
+        'group': group_name,
+        'label': window_label(kind, info.get('displayName')),
+        'disabled': disabled,
+    }
+
+
+def group_name_from(group, fallback='Models'):
+    if not isinstance(group, dict):
+        return fallback
+    for key in ('displayName', 'name', 'title', 'groupId', 'id'):
+        value = group.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return fallback
+
+
+def upsert_window(row, candidate):
+    if not candidate:
+        return
+    kind = candidate['kind']
+    windows = row.setdefault('windows', [])
+    found = None
+    for item in windows:
+        if item.get('kind') == kind:
+            found = item
+            break
+    merged = lower_window(found, candidate)
+    if found is None:
+        windows.append(merged)
+    else:
+        found.update(merged)
+    if kind == '5h':
+        row['short'] = lower_window(row.get('short'), candidate)
+    elif kind == 'weekly':
+        row['weekly'] = lower_window(row.get('weekly'), candidate)
+
+
+def empty_group(name, kind='pool', tag=None):
+    return {'name': name, 'kind': kind, 'tag': tag, 'short': None, 'weekly': None, 'windows': []}
 
 
 def plan_label(assist, auth_method=None):
@@ -215,6 +309,9 @@ def public_window(window):
         'resets_at': window.get('resets_at'),
         'group': window.get('group'),
         'minutes': 300 if window.get('kind') == '5h' else 10080 if window.get('kind') == 'weekly' else None,
+        'kind': window.get('kind'),
+        'label': window.get('label') or window_label(window.get('kind')),
+        'disabled': bool(window.get('disabled')),
     }
 
 
@@ -233,67 +330,168 @@ def apply_groups(summary):
     for group in summary.get('groups') or []:
         if not isinstance(group, dict):
             continue
-        name = group.get('displayName') if isinstance(group.get('displayName'), str) else None
+        name = group_name_from(group, '')
         if not name:
             continue
-        short = weekly = None
+        row = empty_group(name, 'pool')
         for bucket in group.get('buckets') or []:
             if not isinstance(bucket, dict):
                 continue
-            remaining = remaining_percent(bucket.get('remainingFraction'))
-            if remaining is None:
-                continue
-            kind = bucket_window(bucket.get('window'), bucket.get('bucketId'))
-            if not kind:
-                continue
-            candidate = {
-                'kind': kind,
-                'remaining': remaining,
-                'resets_at': unix_time(bucket.get('resetTime')),
-                'group': name,
-            }
-            if kind == '5h':
-                short = lower_window(short, candidate)
-            else:
-                weekly = lower_window(weekly, candidate)
-        if short is None and weekly is None:
+            upsert_window(row, parse_window(bucket, name, bucket.get('bucketId')))
+        if not row['windows']:
             continue
-        groups.append({'name': name, 'short': short, 'weekly': weekly})
+        groups.append(row)
     return groups
 
 
 def merge_groups(current, extra):
     by_name = {}
+    order = []
     for row in list(current or []) + list(extra or []):
         name = row.get('name')
         if not name:
             continue
         previous = by_name.get(name)
         if previous is None:
-            by_name[name] = {'name': name, 'short': row.get('short'), 'weekly': row.get('weekly')}
+            copied = empty_group(name, row.get('kind') or 'pool', row.get('tag'))
+            for window in row.get('windows') or ():
+                upsert_window(copied, window)
+            upsert_window(copied, row.get('short'))
+            upsert_window(copied, row.get('weekly'))
+            by_name[name] = copied
+            order.append(name)
             continue
-        previous['short'] = lower_window(previous.get('short'), row.get('short'))
-        previous['weekly'] = lower_window(previous.get('weekly'), row.get('weekly'))
-    return list(by_name.values())
+        if previous.get('kind') != 'pool' and row.get('kind') == 'pool':
+            previous['kind'] = 'pool'
+        if not previous.get('tag') and row.get('tag'):
+            previous['tag'] = row['tag']
+        for window in row.get('windows') or ():
+            upsert_window(previous, window)
+        upsert_window(previous, row.get('short'))
+        upsert_window(previous, row.get('weekly'))
+    return [by_name[name] for name in order]
 
 
 def public_groups(groups):
     rows = []
     for row in groups or []:
+        windows = [public_window(item) for item in row.get('windows') or ()]
+        windows = [item for item in windows if item]
+        if not windows:
+            if row.get('short'):
+                windows.append(public_window(row['short']))
+            if row.get('weekly'):
+                windows.append(public_window(row['weekly']))
+            windows = [item for item in windows if item]
+        rank = {'5h': 0, 'weekly': 1}
+        windows.sort(key=lambda item: (rank.get(item.get('kind'), 2), item.get('label') or ''))
         rows.append({
             'name': row['name'],
+            'kind': row.get('kind') or 'pool',
+            'tag': row.get('tag'),
             'short': public_window(row.get('short')),
             'weekly': public_window(row.get('weekly')),
+            'windows': windows,
         })
     return rows
 
 
-def windows_from_models(quota):
+def model_family_id(model_id, families):
+    if model_id in families:
+        return model_id
+    for family in sorted(families, key=len, reverse=True):
+        if model_id == family or model_id.startswith(family + '-'):
+            return family
+    stripped = MODEL_VARIANT_SUFFIX.sub('', model_id)
+    return stripped or model_id
+
+
+def model_family_name(family_id, families, display_name):
+    info = families.get(family_id)
+    if isinstance(info, dict) and isinstance(info.get('displayName'), str) and info['displayName'].strip():
+        return info['displayName'].strip()
+    cleaned = THINKING_DISPLAY.sub('', display_name or '').strip()
+    return cleaned or display_name or family_id
+
+
+def _model_order(payload, models):
+    order = []
+    sorts = payload.get('agentModelSorts')
+    if isinstance(sorts, list):
+        for sort in sorts:
+            if not isinstance(sort, dict):
+                continue
+            for group in sort.get('groups') or []:
+                if not isinstance(group, dict):
+                    continue
+                for model_id in group.get('modelIds') or []:
+                    if isinstance(model_id, str) and model_id not in order:
+                        order.append(model_id)
+    for model_id in models:
+        if model_id not in order:
+            order.append(model_id)
+    return order
+
+
+def groups_from_models(payload, now=None):
+    groups = []
+    if not isinstance(payload, dict):
+        return groups
+    models = payload.get('models')
+    if not isinstance(models, dict):
+        return groups
+    families = payload.get('groupedModels') if isinstance(payload.get('groupedModels'), dict) else {}
+    buckets = {}
+    order = []
+
+    def ensure(family_id, name, tag=None):
+        row = buckets.get(family_id)
+        if row is None:
+            row = empty_group(name, 'model', tag)
+            buckets[family_id] = row
+            order.append(family_id)
+        elif tag and not row.get('tag'):
+            row['tag'] = tag
+        return row
+
+    for family_id, info in families.items():
+        name = info.get('displayName') if isinstance(info, dict) else None
+        ensure(family_id, name.strip() if isinstance(name, str) and name.strip() else family_id)
+    for model_id in _model_order(payload, models):
+        info = models.get(model_id)
+        if not isinstance(info, dict):
+            continue
+        display = info.get('displayName')
+        if not isinstance(display, str) or not display.strip():
+            continue
+        family_id = model_family_id(model_id, families)
+        tag = info.get('tagTitle') if isinstance(info.get('tagTitle'), str) and info['tagTitle'].strip() else None
+        row = ensure(family_id, model_family_name(family_id, families, display.strip()), tag)
+        quota = info.get('quotaInfo') if isinstance(info.get('quotaInfo'), dict) else info
+        upsert_window(row, parse_window(quota, row['name'], model_id, now=now))
+    for family_id in order:
+        row = buckets[family_id]
+        if row['windows']:
+            groups.append(row)
+    return groups
+
+
+def windows_from_models(quota, now=None):
     short = weekly = None
+    for row in groups_from_models(quota, now=now):
+        short = lower_window(short, row.get('short'))
+        weekly = lower_window(weekly, row.get('weekly'))
+        for window in row.get('windows') or ():
+            if window.get('kind') == '5h':
+                short = lower_window(short, window)
+            elif window.get('kind') == 'weekly':
+                weekly = lower_window(weekly, window)
+    if short is not None or weekly is not None:
+        return short, weekly
     if not isinstance(quota, dict):
         return short, weekly
-    models = quota.get('models')
     rows = []
+    models = quota.get('models')
     if isinstance(models, dict):
         for name, info in models.items():
             if not isinstance(info, dict):
@@ -303,29 +501,15 @@ def windows_from_models(quota):
     for bucket in quota.get('buckets') or []:
         if isinstance(bucket, dict):
             rows.append((bucket.get('modelId') or bucket.get('model'), bucket))
-    now = time.time()
+    clock = time.time() if now is None else now
     for name, info in rows:
-        if not isinstance(info, dict):
+        candidate = parse_window(info if isinstance(info, dict) else {}, str(name or '') or 'Models', name, now=clock)
+        if not candidate:
             continue
-        remaining = remaining_percent(info.get('remainingFraction'))
-        if remaining is None:
-            continue
-        reset = unix_time(info.get('resetTime'))
-        kind = None
-        if reset is not None:
-            delta = reset - now
-            if 0 < delta <= 6 * 3600:
-                kind = '5h'
-            elif delta > 6 * 3600:
-                kind = 'weekly'
-        ident = str(name or '')
-        if kind is None:
-            kind = bucket_window('', ident) or '5h'
-        candidate = {'kind': kind, 'remaining': remaining, 'resets_at': reset, 'group': ident or None}
-        if kind == '5h':
-            short = lower_window(short, candidate)
-        else:
+        if candidate['kind'] == 'weekly':
             weekly = lower_window(weekly, candidate)
+        else:
+            short = lower_window(short, candidate)
     return short, weekly
 
 
@@ -519,22 +703,23 @@ class QuotaFetcher:
                 last_error = 'forbidden' if status == 403 else 'expired'
             else:
                 last_error = last_error or 'unavailable'
-            if groups:
-                break
             status, models, creds = self._post_auth(
                 creds, endpoint + ':fetchAvailableModels', {})
             if 200 <= status <= 299:
                 extra_short, extra_weekly = windows_from_models(models)
                 short = lower_window(short, extra_short)
                 weekly = lower_window(weekly, extra_weekly)
-            if short is None and weekly is None:
-                status, quota, creds = self._post_auth(
-                    creds, endpoint + ':retrieveUserQuota', summary_body)
-                if 200 <= status <= 299:
-                    extra_short, extra_weekly = windows_from_models(quota)
-                    short = lower_window(short, extra_short)
-                    weekly = lower_window(weekly, extra_weekly)
-            if short is not None or weekly is not None:
+                groups = merge_groups(groups, groups_from_models(models))
+            if groups or short is not None or weekly is not None:
+                break
+            status, quota, creds = self._post_auth(
+                creds, endpoint + ':retrieveUserQuota', summary_body)
+            if 200 <= status <= 299:
+                extra_short, extra_weekly = windows_from_models(quota)
+                short = lower_window(short, extra_short)
+                weekly = lower_window(weekly, extra_weekly)
+                groups = merge_groups(groups, groups_from_models(quota))
+            if short is not None or weekly is not None or groups:
                 break
         if short is not None or weekly is not None:
             return {

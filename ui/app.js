@@ -152,19 +152,21 @@ function resetCreditsCell(value, identity) {
   return cell;
 }
 
-function quotaBar(window, label) {
-  const wrap = node('div', 'quota-block');
+function quotaBar(window, label, compact) {
+  const wrap = node('div', compact ? 'quota-block compact' : 'quota-block');
   const remaining = 100 - window.used;
   const line = node('div', 'quota-top');
-  line.append(node('strong', '', pct(remaining)), node('span', '', `đã dùng ${pct(window.used)}`));
+  if (compact) line.append(node('span', 'quota-window-label', label || 'Quota'), node('strong', '', pct(remaining)));
+  else line.append(node('strong', '', pct(remaining)), node('span', '', `đã dùng ${pct(window.used)}`));
   const bar = node('div', 'bar');
   const fill = node('div', `bar-fill${remaining <= 20 ? ' low' : remaining <= 40 ? ' warning' : ''}`);
   fill.style.width = `${Math.max(0, Math.min(100, remaining))}%`;
   bar.setAttribute('role', 'meter'); bar.setAttribute('aria-valuenow', String(remaining));
   bar.setAttribute('aria-valuemin', '0'); bar.setAttribute('aria-valuemax', '100');
   bar.setAttribute('aria-label', label ? `Quota còn lại · ${label}` : 'Quota còn lại'); bar.append(fill);
-  wrap.append(line, bar, node('div', 'quota-reset', until(window.resets_at)));
-  if (label) wrap.append(node('div', 'quota-reset', label));
+  wrap.append(line, bar);
+  if (!compact || Number.isFinite(window.resets_at)) wrap.append(node('div', 'quota-reset', until(window.resets_at)));
+  if (label && !compact) wrap.append(node('div', 'quota-reset', label));
   return wrap;
 }
 function quotaCell(window, error, groups, kind) {
@@ -176,6 +178,84 @@ function quotaCell(window, error, groups, kind) {
   }
   if (!window) { cell.append(node('span', 'quota-unknown', error ? '— Không đọc được quota' : '— Chưa được báo cáo')); return cell; }
   cell.append(quotaBar(window, window.group));
+  return cell;
+}
+function groupWindows(group) {
+  if (!group) return [];
+  if (Array.isArray(group.windows) && group.windows.length) return group.windows.filter(Boolean);
+  const rows = [];
+  if (group.short) rows.push(group.short);
+  if (group.weekly) rows.push(group.weekly);
+  return rows;
+}
+function shortUsed(group) {
+  const window = group.short || groupWindows(group).find(item => item.kind === '5h') || groupWindows(group)[0];
+  return window ? Math.round(window.used) : null;
+}
+function nestQuotaGroups(groups) {
+  const rows = Array.isArray(groups) ? groups.filter(group => group && groupWindows(group).length) : [];
+  const pools = rows.filter(group => (group.kind || 'pool') !== 'model');
+  const models = rows.filter(group => group.kind === 'model');
+  if (!models.length) return (pools.length ? pools : rows).map(group => Object.assign({}, group, {models: []}));
+  if (!pools.length) return [{name: 'Models', kind: 'bundle', windows: [], models}];
+  const buckets = pools.map(pool => ({pool, models: []}));
+  const leftover = [];
+  for (const model of models) {
+    const used = shortUsed(model);
+    const hits = used == null ? [] : buckets.filter(bucket => shortUsed(bucket.pool) === used);
+    const name = (model.name || '').toLowerCase();
+    const byName = list => list.find(bucket => {
+      const poolName = (bucket.pool.name || '').toLowerCase();
+      if (/claude|gpt|oss/.test(name) && /claude|gpt/.test(poolName)) return true;
+      if (/gemini/.test(name) && /gemini/.test(poolName)) return true;
+      return false;
+    });
+    const target = hits.length === 1 ? hits[0] : (byName(hits) || byName(buckets) || (hits[0] || null));
+    if (target) target.models.push(model);
+    else leftover.push(model);
+  }
+  const nested = buckets.map(bucket => Object.assign({}, bucket.pool, {models: bucket.models}));
+  if (leftover.length) nested.push({name: 'Model khác', kind: 'bundle', windows: [], models: leftover});
+  return nested;
+}
+const antigravityQuotaOpen = new Set();
+function quotaGroupsCell(groups, error) {
+  const cell = node('td', 'quota-groups-cell');
+  const rows = nestQuotaGroups(groups);
+  if (!rows.length) {
+    cell.append(node('span', 'quota-unknown', error ? '— Không đọc được quota' : '— Chưa được báo cáo'));
+    return cell;
+  }
+  for (const group of rows) {
+    const block = node('div', 'quota-group');
+    const title = node('div', 'quota-group-name', group.name);
+    if (group.tag) title.append(node('span', 'quota-tag', group.tag));
+    block.append(title);
+    for (const window of groupWindows(group)) {
+      const label = window.label || (window.kind === 'weekly' ? 'tuần' : window.kind === '5h' ? '5 giờ' : window.kind);
+      block.append(quotaBar(window, label, true));
+    }
+    if (group.models && group.models.length) {
+      const details = node('details', 'quota-models');
+      const key = group.name || 'models';
+      details.open = antigravityQuotaOpen.has(key);
+      details.addEventListener('toggle', () => {
+        if (details.open) antigravityQuotaOpen.add(key);
+        else antigravityQuotaOpen.delete(key);
+      });
+      details.append(node('summary', '', `${group.models.length} model`));
+      for (const model of group.models) {
+        const line = node('div', 'quota-model');
+        line.append(node('span', 'quota-model-name', model.name || 'Model'));
+        if (model.tag) line.append(node('span', 'quota-tag', model.tag));
+        const window = groupWindows(model)[0];
+        if (window) line.append(node('span', 'quota-model-pct', pct(100 - window.used)));
+        details.append(line);
+      }
+      block.append(details);
+    }
+    cell.append(block);
+  }
   return cell;
 }
 function render() {
@@ -270,14 +350,14 @@ function renderAntigravityAccounts() {
   if (!summary.enabled) {
     const row = node('tr');
     const cell = node('td','', 'Chưa bật quản lý Antigravity. Chạy dashboard với account mode để lưu snapshot Keychain.');
-    cell.colSpan = 6;
+    cell.colSpan = 5;
     row.append(cell); body.append(row);
     return;
   }
   if (!profiles.length) {
     const row = node('tr');
     const cell = node('td','', 'Chưa có snapshot Antigravity. Đăng nhập trong IDE rồi lưu phiên trên trang Antigravity.');
-    cell.colSpan = 6;
+    cell.colSpan = 5;
     row.append(cell); body.append(row);
     return;
   }
@@ -318,7 +398,7 @@ function renderAntigravityAccounts() {
     refresh.addEventListener('click', () => refreshAntigravityQuota(profile.id));
     stack.append(refresh, useAccountButton('antigravity', profile.id, name, profile.selected, blocked));
     actions.append(stack);
-    row.append(cell, plan, quotaCell(quota.short, quotaError, quota.groups, 'short'), quotaCell(quota.weekly, quotaError, quota.groups, 'weekly'), status, actions);
+    row.append(cell, plan, quotaGroupsCell(quota.groups, quotaError), status, actions);
     body.append(row);
   }
   if (loading && !antigravityQuotaTimer && !window.RELAY_LOCAL) {
@@ -619,11 +699,10 @@ async function antigravityProfiles(path='/api/providers/antigravity',data) {
       const header=node('div','gemini-header'),titleBox=node('div');
       const quota=profile.quota||{};
       const remain=window=>window?`${pct(100-window.used)} còn`:'—';
-      const groupLine=(Array.isArray(quota.groups)?quota.groups:[]).map(group => {
-        const parts=[];
-        if(group.short) parts.push(`5h ${remain(group.short)}`);
-        if(group.weekly) parts.push(`tuần ${remain(group.weekly)}`);
-        return parts.length ? `${group.name} ${parts.join(' / ')}` : '';
+      const groupLine=nestQuotaGroups(quota.groups).map(group => {
+        const parts=groupWindows(group).map(window => `${window.label || ''} ${remain(window)}`.trim());
+        const extra=group.models && group.models.length ? ` · ${group.models.length} model` : '';
+        return (parts.length || extra) ? `${group.name} ${parts.join(' / ')}${extra}`.trim() : '';
       }).filter(Boolean).join(' · ');
       const quotaLine=quota.status==='ok'
         ? `${quota.plan || 'Antigravity'} · ${groupLine || `5 giờ ${remain(quota.short)} · tuần ${remain(quota.weekly)}`}`

@@ -8,8 +8,8 @@ from unittest.mock import patch
 from urllib.parse import parse_qsl
 
 from antigravity_quota import (
-    QuotaFetcher, apply_groups, apply_summary, discover_client_secret, plan_label,
-    remaining_percent, scan_client_secret,
+    QuotaFetcher, apply_groups, apply_summary, discover_client_secret, groups_from_models,
+    plan_label, remaining_percent, scan_client_secret,
 )
 from test_antigravity_provider import token
 
@@ -65,6 +65,62 @@ class QuotaParseTests(unittest.TestCase):
         gemini = apply_groups(SUMMARY)[1]
         self.assertEqual(gemini['short']['remaining'], 20)
         self.assertEqual(gemini['weekly']['remaining'], 40)
+        self.assertEqual([item['kind'] for item in gemini['windows']], ['5h', 'weekly'])
+
+    def test_disabled_bucket_reads_as_empty(self):
+        groups = apply_groups({'groups': [{'displayName': 'Claude and GPT models', 'buckets': [
+            {'bucketId': '3p-5h', 'window': '5h', 'remainingFraction': 1.0, 'disabled': True},
+            {'bucketId': '3p-weekly', 'window': 'weekly', 'remainingFraction': 0.0},
+        ]}]})
+        self.assertEqual(groups[0]['short']['remaining'], 0)
+        self.assertTrue(groups[0]['short']['disabled'])
+        self.assertEqual(groups[0]['weekly']['remaining'], 0)
+
+    def test_unknown_window_is_kept(self):
+        groups = apply_groups({'groups': [{'displayName': 'Gemini 4 Neon', 'buckets': [
+            {'bucketId': 'neon-daily', 'window': '24h', 'remainingFraction': 0.4,
+             'resetTime': '2026-10-23T18:11:00Z'},
+        ]}]})
+        self.assertEqual(groups[0]['name'], 'Gemini 4 Neon')
+        self.assertEqual(groups[0]['windows'][0]['kind'], '24h')
+        self.assertEqual(groups[0]['windows'][0]['remaining'], 40)
+
+    def test_model_families_follow_api_without_hardcoded_names(self):
+        groups = groups_from_models({
+            'groupedModels': {
+                'gemini-4-hydrogen': {'displayName': 'Gemini 4 Hydrogen'},
+                'claude-sonnet-5-5': {'displayName': 'Claude Sonnet 5.5'},
+            },
+            'agentModelSorts': [{'displayName': 'Recommended', 'groups': [{'modelIds': [
+                'gemini-4-hydrogen-high', 'claude-sonnet-5-5-medium', 'gpt-oss-120b-medium',
+            ]}]}],
+            'models': {
+                'gemini-4-hydrogen-high': {
+                    'displayName': 'Gemini 4 Hydrogen (High)', 'tagTitle': 'New',
+                    'quotaInfo': {'remainingFraction': 0.8, 'resetTime': '2026-10-22T18:11:00Z'},
+                },
+                'gemini-4-hydrogen-low': {
+                    'displayName': 'Gemini 4 Hydrogen (Low)',
+                    'quotaInfo': {'remainingFraction': 0.8, 'resetTime': '2026-10-22T18:11:00Z'},
+                },
+                'claude-sonnet-5-5-medium': {
+                    'displayName': 'Claude Sonnet 5.5 (Medium)', 'tagTitle': 'New',
+                    'quotaInfo': {'remainingFraction': 1.0, 'resetTime': '2026-10-22T19:11:00Z'},
+                },
+                'gpt-oss-120b-medium': {
+                    'displayName': 'GPT-OSS 120B (Medium)',
+                    'quotaInfo': {'remainingFraction': 1.0, 'resetTime': '2026-10-22T19:11:00Z'},
+                },
+                'tab_jump_flash_lite_preview': {
+                    'quotaInfo': {'remainingFraction': 1.0},
+                },
+            },
+        }, now=1_700_000_000)
+        names = [row['name'] for row in groups]
+        self.assertEqual(names, ['Gemini 4 Hydrogen', 'Claude Sonnet 5.5', 'GPT-OSS 120B'])
+        self.assertEqual(groups[0]['tag'], 'New')
+        self.assertEqual(groups[0]['kind'], 'model')
+        self.assertNotIn('tab_jump_flash_lite_preview', names)
 
     def test_plan_labels(self):
         self.assertEqual(plan_label({'paidTier': {'id': 'g1-pro-tier'}}), 'Pro')
@@ -77,6 +133,7 @@ class QuotaFetchTests(unittest.TestCase):
         transport = ScriptedTransport([
             (200, {'paidTier': {'id': 'g1-pro-tier'}, 'cloudaicompanionProject': 'proj'}),
             (200, SUMMARY),
+            (200, {'models': {}, 'groupedModels': {}}),
         ])
         fetcher = QuotaFetcher(transport=transport, now=lambda: 1_700_000_000)
         result, refreshed = fetcher.fetch(token('work'))
@@ -95,6 +152,7 @@ class QuotaFetchTests(unittest.TestCase):
         self.assertEqual(transport.calls[0]['bearer'], 'access-work')
         self.assertTrue(transport.calls[0]['url'].endswith(':loadCodeAssist'))
         self.assertTrue(transport.calls[1]['url'].endswith(':retrieveUserQuotaSummary'))
+        self.assertTrue(transport.calls[2]['url'].endswith(':fetchAvailableModels'))
 
     def test_expired_token_refreshes_then_reads_quota(self):
         blob = token('work')
@@ -104,6 +162,7 @@ class QuotaFetchTests(unittest.TestCase):
             (200, {'access_token': 'fresh-access', 'expires_in': 3600}),
             (200, {'paidTier': {'id': 'g1-ultra-tier'}}),
             (200, SUMMARY),
+            (200, {'models': {}, 'groupedModels': {}}),
         ])
         fetcher = QuotaFetcher(transport=transport, now=lambda: 1_700_000_000, secret='GOCSPX-unit-test')
         result, refreshed = fetcher.fetch(json.dumps(doc).encode())
@@ -133,6 +192,7 @@ class QuotaFetchTests(unittest.TestCase):
         self.assertEqual(result['status'], 'ok')
         self.assertEqual(result['plan'], 'Free')
         self.assertEqual(result['weekly']['used'], 90)
+        self.assertEqual([row['name'] for row in result['groups']], [])
 
     def test_cache_ttl(self):
         fetcher = QuotaFetcher(now=lambda: self.now)
@@ -146,6 +206,7 @@ class QuotaFetchTests(unittest.TestCase):
         transport = ScriptedTransport([
             (400, {'error': {'code': 400, 'status': 'INVALID_ARGUMENT'}}),
             (200, SUMMARY),
+            (200, {'models': {}, 'groupedModels': {}}),
         ])
         fetcher = QuotaFetcher(transport=transport, now=lambda: 1_700_000_000)
         result, _refreshed = fetcher.fetch(token('work'))
@@ -176,6 +237,13 @@ class QuotaFetchTests(unittest.TestCase):
                      'remainingFraction': 0.0, 'resetTime': '2026-10-28T16:06:31Z'},
                 ]},
             ]}),
+            (200, {'groupedModels': {'gemini-4-hydrogen': {'displayName': 'Gemini 4 Hydrogen'}},
+                   'models': {
+                       'gemini-4-hydrogen-high': {
+                           'displayName': 'Gemini 4 Hydrogen (High)', 'tagTitle': 'New',
+                           'quotaInfo': {'remainingFraction': 0.34, 'resetTime': '2026-10-22T18:11:00Z'},
+                       },
+                   }}),
         ])
         fetcher = QuotaFetcher(transport=transport, now=lambda: 1_700_000_000)
         result, _refreshed = fetcher.fetch(token('work'))
@@ -185,11 +253,13 @@ class QuotaFetchTests(unittest.TestCase):
         self.assertEqual(result['weekly']['used'], 100)
         self.assertEqual(result['weekly']['group'], 'Gemini 4 Argon')
         names = [row['name'] for row in result['groups']]
-        self.assertEqual(names, ['Gemini Models', 'Claude and GPT models', 'Gemini 4 Argon'])
+        self.assertEqual(names, ['Gemini Models', 'Claude and GPT models', 'Gemini 4 Argon', 'Gemini 4 Hydrogen'])
         self.assertEqual(result['groups'][0]['weekly']['used'], 59)
         self.assertEqual(result['groups'][1]['short']['used'], 0)
         self.assertIsNone(result['groups'][2]['short'])
-        self.assertEqual(len(transport.calls), 2)
+        self.assertEqual(result['groups'][3]['kind'], 'model')
+        self.assertEqual(result['groups'][3]['tag'], 'New')
+        self.assertEqual(len(transport.calls), 3)
 
     def test_empty_windows_are_error(self):
         transport = ScriptedTransport([

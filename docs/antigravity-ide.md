@@ -15,17 +15,16 @@ Tham khảo cách làm (không gọi các binary đó lúc runtime):
 ## Dashboard
 
 Mục **Tài khoản** trên tổng quan liệt kê snapshot Antigravity cạnh bảng Codex:
-gói, hạn mức 5 giờ/tuần còn lại, và thời điểm reset nếu Google báo cáo. Quota
-đọc từ snapshot token (không cần đổi Keychain) qua cùng API Code Assist mà
-Antigravity IDE / VS Code dùng: `loadCodeAssist` và `retrieveUserQuotaSummary`
-trên host `daily-cloudcode-pa` (số liệu realtime theo nhóm Gemini, Claude/GPT,
-Argon). Access
+gói, pool hạn mức, và từng model Google trả về. Quota đọc từ snapshot token
+(không cần đổi Keychain) qua `loadCodeAssist`, `retrieveUserQuotaSummary`
+và `fetchAvailableModels` trên host `daily-cloudcode-pa`. Tên pool/model không
+hardcode: thêm model mới phía Google thì dashboard hiện thêm. Access
 token hết hạn được làm mới bằng client ID public của Antigravity; client secret
 được quét từ `language_server` của app đã cài (không nhúng trong source Relay).
 Cần `/Applications/Antigravity.app`. Đổi tài khoản và lưu snapshot ở sidebar
 **Antigravity**. Nút **↻ Quota** trên từng hàng, hoặc **Đọc quota** cho tất cả,
-chờ Google trả số liệu. Mỗi nhóm hạn mức (Gemini, Claude/GPT, Argon) là một
-pool riêng; không cộng thành một tổng.
+chờ Google trả số liệu. Mỗi pool và mỗi family model là hạn mức riêng; không
+cộng thành một tổng.
 
 1. Đăng nhập tài khoản A trong Antigravity IDE.
 2. Bấm **Lưu phiên Keychain hiện tại** (có thể đặt alias).
